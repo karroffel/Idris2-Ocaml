@@ -1,0 +1,12 @@
+-- SPDX-FileCopyrightText: Thomas Herzog
+--
+-- SPDX-License-Identifier: CC0-1.0
+
+package idris2-ocaml
+
+depends = idris2, base, contrib, network
+
+sourcedir = "src"
+
+main = Ocaml.Ocaml
+executable = idris2-ocaml
