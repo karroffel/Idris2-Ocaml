@@ -21,6 +21,8 @@ import System
 import System.File
 
 
+import Ocaml.SpecialiseTypes
+
 
 ocamlKeywords : List String
 ocamlKeywords = [
@@ -35,38 +37,19 @@ ocamlKeywords = [
     "try", "type", "val", "virtual", "when", "while", "with"
 ]
 
-binderInner : Binder ty -> ty
-binderInner (Lam x y z) = z
-binderInner (Let x val y) = y
-binderInner (Pi x y z) = z
-binderInner (PVar x y z) = z
-binderInner (PLet x val y) = y
-binderInner (PVTy x y) = y
-
-findTypes : (names : List Name) ->
-            Term names ->
-            -- arguments, return type
-            (List (ns : List Name ** Term ns), (ns : List Name ** Term ns))
-findTypes names (Bind fc x b scope) =
-    let inner       = binderInner b
-        (rest, ret) = findTypes (x::names) scope
-    in ((names ** inner) :: rest, ret)
-findTypes names x                   = ([], (names ** x))
-
 printTypeInfo : Context -> Name -> NamedDef -> Core ()
 printTypeInfo ctxt name (MkNmFun args y) = do
 
     Just glob <- lookupCtxtExact name ctxt
-    | Nothing => pure ()
+        | Nothing => throw $ InternalError ("Unable to get GlobalDefs of " ++ show name)
 
-    let (argTys, retTy) = findTypes [] glob.type
-        argTys' = map (\(_ ** x) => show x) argTys
-        retTy'  = show (snd retTy)
+    let typeInfo = extractTypes (length args) glob.type
 
     coreLift $ putStrLn $ "Fun Name            " ++ show name
-    coreLift $ putStrLn $ "  Arg types         " ++ show argTys'
-    coreLift $ putStrLn $ "  Ret type          " ++ show retTy'
-
+    coreLift $ putStrLn $ "  Num args          " ++ show (length args)
+    coreLift $ putStrLn $ "  Arg types         " ++ show typeInfo.argTypes
+    coreLift $ putStrLn $ "  Ret type          " ++ show typeInfo.restType
+    coreLift $ putStrLn $ "  Args left         " ++ show typeInfo.leftOverArgs
 
     -- coreLift $ putStrLn $ "   Type              " ++ show (glob.type)
     coreLift $ putStrLn $ "     Erase args      " ++ show (glob.eraseArgs)
@@ -78,11 +61,22 @@ printTypeInfo ctxt name (MkNmFun args y) = do
     pure ()
     
 printTypeInfo ctxt name (MkNmCon tag arity nt) = do
-    coreLift $ putStrLn $ "Con Name     " ++ show name
     Just glob <- lookupCtxtExact name ctxt
-        | Nothing => coreLift $ putStrLn "Could not get GlobalDef"
-    let ty = type glob
-    coreLift $ putStrLn $ "  Type: " ++ show ty
+        | Nothing => throw $ InternalError ("Unable to get GlobalDefs of " ++ show name)
+
+    let typeInfo = extractTypes arity glob.type
+
+    coreLift $ putStrLn $ "Con Name            " ++ show name
+    coreLift $ putStrLn $ "  Num args          " ++ show arity
+    coreLift $ putStrLn $ "  Arg types         " ++ show typeInfo.argTypes
+    coreLift $ putStrLn $ "  Ret type          " ++ show typeInfo.restType
+    coreLift $ putStrLn $ "  Args left         " ++ show typeInfo.leftOverArgs
+
+    coreLift $ putStrLn $ "     Erase args      " ++ show (glob.eraseArgs)
+    coreLift $ putStrLn $ "     Safe erase args " ++ show (glob.safeErase)
+    coreLift $ putStrLn $ "     Inferrable args " ++ show (glob.inferrable)
+    coreLift $ putStrLn ""
+
 printTypeInfo ctxt name (MkNmForeign ccs fargs y) = do
     coreLift $ putStrLn $ "Foreign Name " ++ show name
     Just glob <- lookupCtxtExact name ctxt
@@ -108,17 +102,13 @@ compileExpr c tmpDir outputDir tm outfile = do
     let context = gamma defs
 
     _ <- traverse (\(name, _, def) => printTypeInfo context name def) ndefs
-
-    -- funcs <- traverse (\(name, _, def) => mlFun name def) ndefs
-
-    -- mainCode <- mlExpr ctm
     
-    -- support <- readDataFile "ocaml/support.ml"
+    support <- readDataFile "ocaml/support.ml"
 
+    let generatedCode = "print_string \"Hello, world\";;"
     -- let generatedCode = concat funcs ++ mainFunc mainCode
-    -- let code = support ++ generatedCode
+    let code = support ++ generatedCode
 
-    let code = "hiii"
     let out = outputDir </> outfile <.> "ml"
     Right () <- coreLift (writeFile out code)
         | Left err => throw (FileErr out err)

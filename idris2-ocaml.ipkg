@@ -8,5 +8,8 @@ depends = idris2, base, contrib, network
 
 sourcedir = "src"
 
+--modules = Ocaml.Ocaml
+--        , Ocaml.SpecialiseTypes
+
 main = Ocaml.Ocaml
 executable = idris2-ocaml
