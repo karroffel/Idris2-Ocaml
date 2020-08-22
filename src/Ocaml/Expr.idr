@@ -67,6 +67,7 @@ empty = MkMLExpr "" SOpaque
 
 ||| The name of the OCaml function that will cast an expression to a type
 hintFn : SType -> String
+hintFn SErased = "hint_erased"
 hintFn SInt = "hint_int"
 hintFn SInteger = "hint_bint"
 hintFn SBits8 = "hint_bits8"
@@ -81,6 +82,7 @@ hintFn SOpaque = "hint_opaque"
 
 export
 ocamlTypeName : SType -> String
+ocamlTypeName SErased = "unit"
 ocamlTypeName SInt = "int"
 ocamlTypeName SInteger = "int64"
 ocamlTypeName SBits8 = "int32"
@@ -95,6 +97,7 @@ ocamlTypeName SOpaque = "idr2_opaque"
 
 ||| The name of the OCaml function that will cast an expression to a type
 castFn : SType -> String
+castFn SErased = "as_erased"
 castFn SInt = "as_int"
 castFn SInteger = "as_bint"
 castFn SBits8 = "as_bits8"
@@ -112,12 +115,20 @@ castFn SOpaque = "as_opaque"
 maybeCastFn : (from, to : SType) -> Maybe String
 maybeCastFn from to = if from == to then Nothing else Just (castFn to)
 
+
+
+
+
+
+
+
 mutual
     castedExpr : {auto di : DefInfos} ->
                  {auto funArgs : NameMap SType } ->
                  SType ->
                  NamedCExp ->
                  Core MLExpr
+    castedExpr SErased _ = pure $ MkMLExpr "()" SErased
     castedExpr ty expr = do
         expr' <- mlExpr expr
         case maybeCastFn expr'.type ty of
@@ -140,9 +151,9 @@ mutual
         in pure $ MkMLExpr source type
     mlExpr (NmLam fc x expr) = do
         expr' <- mlExpr expr
-        let source = "(fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> Obj.magic ("
+        let source = "(as_opaque (fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> Obj.magic ("
                 ++ expr'.source
-                ++ "))"
+                ++ ")))"
             type = SOpaque
         pure $ MkMLExpr source type
     mlExpr (NmLet fc x rhs expr) = do
@@ -156,18 +167,14 @@ mutual
         args' <- traverse mlExpr args
         case lookup name di of
             Just tyInfo => do
-                let cInfo = callInfo tyInfo args
-                dArgs <- traverse (\(ty, ex) => castedExpr ty ex) cInfo.directArgs
-                iArgs <- traverse (castedExpr SOpaque) cInfo.restArgs
+                
+                let args = tyInfo.argTypes `zip` args
 
-                let dCall = "(" ++ mlName name ++ " " ++ showSep " " (map source dArgs) ++ ")"
+                args' <- traverse (uncurry castedExpr) args
 
-                if isNil iArgs
-                    then pure $ MkMLExpr dCall cInfo.returnType
-                    else
-                        let iCall = "(as_fun " ++ dCall ++ " " ++ showSep " " (map source iArgs) ++ ")"
-                            hinted = "(" ++ hintFn cInfo.returnType ++ " " ++ iCall ++ ")"
-                        in pure $ MkMLExpr hinted cInfo.returnType
+                let call = "(" ++ mlName name ++ " " ++ showSep " " (map source args') ++ ")"
+
+                pure $ MkMLExpr call tyInfo.restType
                 
             Nothing => throw $ InternalError ("Unsupported function " ++ show name)
 
@@ -179,7 +186,20 @@ mutual
             type = SOpaque
         pure $ MkMLExpr src type
 
-    mlExpr (NmCon fc x tag xs) = pure empty --?mlExpr_rhs_6
+    mlExpr (NmCon fc name tag args) = do
+        let tag' = fromMaybe 0 tag
+        case lookup name di of
+            Just tyInfo => do
+                args' <- traverse (uncurry castedExpr) (tyInfo.argTypes `zip` args)
+                let argsArray = "(" ++ showSep ", " (map source args') ++ ")"
+                    src = "(as_opaque (" ++ show tag' ++ ", as_opaque " ++ argsArray ++ "))"
+                pure $ MkMLExpr src SOpaque
+            Nothing => do
+                args' <- traverse (castedExpr SOpaque) args
+                let argsArray = "(" ++ showSep ", " (map source args') ++ ")"
+                    src = "(as_opaque (" ++ show tag' ++ ", as_opaque " ++ argsArray ++ "))"
+                pure $ MkMLExpr src SOpaque
+
     mlExpr (NmOp fc x xs) = pure empty --?mlExpr_rhs_7
     mlExpr (NmExtPrim fc p xs) = pure empty --?mlExpr_rhs_8
     mlExpr (NmForce fc x) = pure empty --?mlExpr_rhs_9

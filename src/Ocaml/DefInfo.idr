@@ -10,7 +10,8 @@ import Data.Vect
 import Data.List
 
 public export
-data SType = SInt
+data SType = SErased
+           | SInt
            | SInteger
            | SBits8
            | SBits16
@@ -24,6 +25,7 @@ data SType = SInt
 
 public export
 Eq SType where
+    SErased == SErased = True
     SInt == SInt = True
     SInteger == SInteger = True
     SBits8 == SBits8 = True
@@ -40,6 +42,7 @@ Eq SType where
 public export
 Show SType where
     show s = case s of
+        SErased => "(erased)"
         SInt => "Int"
         SInteger => "Integer"
         SBits8 => "Bits8"
@@ -100,12 +103,18 @@ extractTypes numArgs term =
     in MkExtRes argTypes restType res.leftOverArgs
 
 
+eraseTypes : (idx : Nat) -> (erase : List Nat) -> List SType -> List SType
+eraseTypes n (i::is) (a::as) =
+    if n == i
+        then SErased :: eraseTypes (S n) is as
+        else a :: eraseTypes (S n) (i::is) as
+eraseTypes _ _ args = args
+
+
 public export
 record DefInfo where
     constructor MkDefInfo
-    eraseArgs : List Nat
     argTypes : List SType
-    leftOverArgs : Nat
     restType : SType
     
 public export
@@ -129,54 +138,18 @@ buildDefInfoMap xs = inner empty xs
                 MkNmFun args _ => 
                     let res = extractTypes (length args) glob.type
                         restTy = res.restType
-                        info = MkDefInfo glob.eraseArgs res.argTypes res.leftOverArgs restTy
+                        argTys = res.argTypes ++ replicate res.leftOverArgs SOpaque
+                        argTys' = eraseTypes 0 glob.eraseArgs argTys
+                        info = MkDefInfo argTys' restTy
                     in inner {c = c} (insert name info acc) defs
                 MkNmCon tag arity nt => 
                     let res = extractTypes arity glob.type
                         restTy = res.restType
-                        info = MkDefInfo glob.eraseArgs res.argTypes res.leftOverArgs restTy
+                        argTys = res.argTypes ++ replicate res.leftOverArgs SOpaque
+                        argTys' = eraseTypes 0 glob.eraseArgs argTys
+                        info = MkDefInfo argTys' restTy
                     in inner {c = c} (insert name info acc) defs
 
                 -- skip for now
                 MkNmForeign ccs fargs x => inner {c = c} acc defs
                 MkNmError x => inner {c = c} acc defs
-
-
-
-removeIdx : (start : Nat) -> List Nat -> List a -> List a
-removeIdx n (i::idxs) (x::xs) =
-    if i < n then
-        removeIdx n idxs (x::xs)
-    else if i == n then
-        removeIdx (S n) idxs xs
-    else
-        x :: (removeIdx (S n) (i::idxs) xs)
-
-removeIdx _ _ args = args
-
-
-
-
-public export
-record CallInfo where
-    constructor MkCallInfo
-    returnType : SType
-    directArgs : List (SType, NamedCExp)
-    restArgs : List NamedCExp
-
-export
-callInfo : DefInfo -> List NamedCExp -> CallInfo
-callInfo di args =
-    let
-        numDArgs = length di.argTypes
-        (dArgs, iArgs) = splitAt numDArgs args
-        dArgs' = removeIdx 0 di.eraseArgs (zip di.argTypes dArgs)
-        iArgs' = removeIdx numDArgs di.eraseArgs iArgs
-    in MkCallInfo di.restType dArgs' iArgs'
-
-export
-defArgs : DefInfo -> List Name -> (List (SType, Name), SType)
-defArgs di args =
-    let tys = di.argTypes ++ replicate di.leftOverArgs SOpaque
-        args' = removeIdx 0 di.eraseArgs (zip tys args)
-    in (args', di.restType)

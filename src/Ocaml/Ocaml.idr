@@ -30,7 +30,8 @@ mlDef name (MkNmFun args expr) = do
     Just info <- pure $ lookup name di
         | Nothing => throw $ InternalError $ "No Extracted type for function " ++ show name
     
-    let (args', ret) = defArgs info args
+    let args' = info.argTypes `zip` args
+        ret = info.restType
 
     let argDecls = showSep " " $ map (\(ty, n) => "(" ++ mlName n ++ " : " ++ ocamlTypeName ty ++ ")") args'
         header = "and " ++ mlName name ++ " " ++ argDecls ++ " : " ++ ocamlTypeName ret ++ " = "
