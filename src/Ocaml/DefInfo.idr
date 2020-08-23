@@ -55,18 +55,37 @@ Show SType where
         SWorld => "World"
         SOpaque => "Opaque"
 
+export
+stypeFromConst : Constant -> SType
+stypeFromConst IntType = SInt
+stypeFromConst IntegerType = SInteger
+stypeFromConst Bits8Type = SBits8
+stypeFromConst Bits16Type = SBits16
+stypeFromConst Bits32Type = SBits32
+stypeFromConst Bits64Type = SBits64
+stypeFromConst StringType = SString
+stypeFromConst CharType = SChar
+stypeFromConst DoubleType = SDouble
+stypeFromConst WorldType = SWorld
+stypeFromConst _ = SOpaque
+
 fromTerm : Term names -> SType
-fromTerm (PrimVal fc IntType) = SInt
-fromTerm (PrimVal fc IntegerType) = SInteger
-fromTerm (PrimVal fc Bits8Type) = SBits8
-fromTerm (PrimVal fc Bits16Type) = SBits16
-fromTerm (PrimVal fc Bits32Type) = SBits32
-fromTerm (PrimVal fc Bits64Type) = SBits64
-fromTerm (PrimVal fc StringType) = SString
-fromTerm (PrimVal fc CharType) = SChar
-fromTerm (PrimVal fc DoubleType) = SDouble
-fromTerm (PrimVal fc WorldType) = SWorld
+fromTerm (PrimVal fc c) = stypeFromConst c
 fromTerm _ = SOpaque
+
+export
+fromCFType : CFType -> SType
+fromCFType CFUnit = SErased
+fromCFType CFInt = SInt
+fromCFType CFUnsigned8 = SBits8
+fromCFType CFUnsigned16 = SBits16
+fromCFType CFUnsigned32 = SBits32
+fromCFType CFUnsigned64 = SBits64
+fromCFType CFString = SString
+fromCFType CFChar = SChar
+fromCFType CFDouble = SDouble
+fromCFType CFWorld = SWorld
+fromCFType _ = SOpaque
 
 binderInner : Binder ty -> ty
 binderInner (Lam fc x y z) = z
@@ -150,6 +169,7 @@ buildDefInfoMap xs = inner empty xs
                         info = MkDefInfo argTys' restTy
                     in inner {c = c} (insert name info acc) defs
 
-                -- skip for now
-                MkNmForeign ccs fargs x => inner {c = c} acc defs
+                MkNmForeign ccs argTys ret => do
+                    let info = MkDefInfo (map fromCFType argTys) (fromCFType ret)
+                    inner {c = c} (insert name info acc) defs
                 MkNmError x => inner {c = c} acc defs

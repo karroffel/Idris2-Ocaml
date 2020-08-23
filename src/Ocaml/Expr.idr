@@ -43,18 +43,15 @@ mlIdent s =
 
 export
 mlName : Name -> String
-mlName (NS xs x) = showSep "'" (reverse xs) ++ "_" ++ mlName x
-mlName (UN x) = mlIdent x
-mlName (MN x y) = mlIdent x ++ "_" ++ show y
+mlName (NS xs x) = "ns__" ++ showSep "'" (reverse xs) ++ "_" ++ mlName x
+mlName (UN x) = "un__" ++ mlIdent x
+mlName (MN x y) = "mn__" ++ mlIdent x ++ "_" ++ show y
 mlName (PV x y) = "pat__" ++ mlName x ++ "_" ++ show y
 mlName (DN x y) = mlName y
 mlName (Nested (i, x) n) = "n__" ++ show i ++ "_" ++ show x ++ "_" ++ mlName n
 mlName (CaseBlock x y) = "case__" ++ mlIdent x ++ "_" ++ show y
 mlName (WithBlock x y) = "with__" ++ mlIdent x ++ "_" ++ show y
 mlName (Resolved x) = "fn__" ++ show x
-
-
-
 
 
 
@@ -67,6 +64,10 @@ record MLExpr where
 public export
 empty : MLExpr
 empty = MkMLExpr "" SOpaque
+
+public export
+erased : MLExpr
+erased = MkMLExpr "()" SErased
 
 ||| The name of the OCaml function that will cast an expression to a type
 hintFn : SType -> String
@@ -118,7 +119,37 @@ castFn SOpaque = "as_opaque"
 maybeCastFn : (from, to : SType) -> Maybe String
 maybeCastFn from to = if from == to then Nothing else Just (castFn to)
 
+mlChar : Char -> String
+mlChar c = "\'" ++ (okchar c) ++ "\'" 
+    where
+        okchar : Char -> String
+        okchar c = if (c >= ' ') && (c /= '\\') && (c /= '"') && (c /= '\'') && (c <= '~')
+            then cast c
+            else case c of
+                '\0' => "\\0"
+                '\'' => "\\'"
+                '"' => "\\\""
+                '\r' => "\\r"
+                '\n' => "\\n"
+                '\t' => "\\t"
+                '\b' => "\\b"
+                other => "\\x" ++ leftPad '0' 2 (asHex (cast {to=Int} c))
 
+mlString : String -> String
+mlString s = "\"" ++ (concatMap okchar (unpack s)) ++ "\""
+    where
+    okchar : Char -> String
+    okchar c = if (c >= ' ') && (c /= '\\') && (c /= '"') && (c /= '\'') && (c <= '~')
+                    then cast c
+                    else case c of
+                            '\0' => "\\0"
+                            '\'' => "\\'"
+                            '"' => "\\\""
+                            '\r' => "\\r"
+                            '\n' => "\\n"
+                            '\t' => "\\t"
+                            '\b' => "\\b"
+                            other => "\\u{" ++ asHex (cast {to=Int} c) ++ "}"
 
 
 mlPrimVal : Constant -> Core MLExpr
@@ -128,8 +159,8 @@ mlPrimVal (B8 x) = pure $ MkMLExpr (show x ++ "l") SBits8
 mlPrimVal (B16 x) = pure $ MkMLExpr (show x ++ "l") SBits16
 mlPrimVal (B32 x) = pure $ MkMLExpr (show x ++ "l") SBits32
 mlPrimVal (B64 x) = pure $ MkMLExpr (show x ++ "L") SBits64
-mlPrimVal (Str x) = pure $ MkMLExpr (show x) SString
-mlPrimVal (Ch x) = pure $ MkMLExpr (show x) SChar
+mlPrimVal (Str x) = pure $ MkMLExpr (mlString x) SString
+mlPrimVal (Ch x) = pure $ MkMLExpr (mlChar x) SChar
 mlPrimVal (Db x) = pure $ MkMLExpr (show x) SDouble
 mlPrimVal WorldVal = pure $ MkMLExpr "()" SWorld
 mlPrimVal val = throw . InternalError $ "Unsupported primitive value: " ++ show val
@@ -139,6 +170,9 @@ binOp op a b = "(" ++ a ++ " " ++ op ++ " " ++ b ++ ")"
 
 fnCall : (fn : String) -> (args : List String) -> String
 fnCall fn args = "(" ++ fn ++ " " ++ showSep " " args ++ ")"
+
+boolOp : (op : String) -> (a, b : String) -> String
+boolOp op a b = fnCall "int_of_bool" [binOp op a b]
 
 record PrimFnRes (arity : Nat) where
     constructor MkPrimFnRes
@@ -199,35 +233,35 @@ mlPrimFn (ShiftR Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => fnCall "In
 mlPrimFn (ShiftR Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => fnCall "Int32.shift_right" [a, fnCall "Int32.to_int" [b]]
 mlPrimFn (ShiftR Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => fnCall "Int32.shift_right" [a, fnCall "Int32.to_int" [b]]
 mlPrimFn (ShiftR Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.shift_right" [a, fnCall "Int64.to_int" [b]]
-mlPrimFn (BAnd ty) args = ?mlPrimFn_rhs_9
-mlPrimFn (BOr ty) args = ?mlPrimFn_rhs_10
-mlPrimFn (BXOr ty) args = ?mlPrimFn_rhs_11
-mlPrimFn (LT ty) args = ?mlPrimFn_rhs_12
-mlPrimFn (LTE ty) args = ?mlPrimFn_rhs_13
-mlPrimFn (EQ ty) args = ?mlPrimFn_rhs_14
-mlPrimFn (GTE ty) args = ?mlPrimFn_rhs_15
-mlPrimFn (GT ty) args = ?mlPrimFn_rhs_16
-mlPrimFn StrLength args = ?mlPrimFn_rhs_17
-mlPrimFn StrHead args = ?mlPrimFn_rhs_18
-mlPrimFn StrTail args = ?mlPrimFn_rhs_19
-mlPrimFn StrIndex args = ?mlPrimFn_rhs_20
-mlPrimFn StrCons args = ?mlPrimFn_rhs_21
-mlPrimFn StrAppend args = ?mlPrimFn_rhs_22
-mlPrimFn StrReverse args = ?mlPrimFn_rhs_23
-mlPrimFn StrSubstr args = ?mlPrimFn_rhs_24
-mlPrimFn DoubleExp args = ?mlPrimFn_rhs_25
-mlPrimFn DoubleLog args = ?mlPrimFn_rhs_26
-mlPrimFn DoubleSin args = ?mlPrimFn_rhs_27
-mlPrimFn DoubleCos args = ?mlPrimFn_rhs_28
-mlPrimFn DoubleTan args = ?mlPrimFn_rhs_29
-mlPrimFn DoubleASin args = ?mlPrimFn_rhs_30
-mlPrimFn DoubleACos args = ?mlPrimFn_rhs_31
-mlPrimFn DoubleATan args = ?mlPrimFn_rhs_32
-mlPrimFn DoubleSqrt args = ?mlPrimFn_rhs_33
-mlPrimFn DoubleFloor args = ?mlPrimFn_rhs_34
-mlPrimFn DoubleCeiling args = ?mlPrimFn_rhs_35
-mlPrimFn BelieveMe args = ?mlPrimFn_rhs_37
-mlPrimFn Crash args = ?mlPrimFn_rhs_38
+mlPrimFn (BAnd ty) args = throw $ InternalError "unimplemented bitwise-and"
+mlPrimFn (BOr ty) args = throw $ InternalError "unimplemented bitwise-or"
+mlPrimFn (BXOr ty) args = throw $ InternalError "unimplemented bitwise-xor"
+mlPrimFn (LT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<" a b
+mlPrimFn (LTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<=" a b
+mlPrimFn (EQ ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "==" a b
+mlPrimFn (GTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">=" a b
+mlPrimFn (GT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">" a b
+mlPrimFn StrLength [a] = pure $ MkPrimFnRes [SString] SInt $ \[a] => fnCall "String.length" [a]
+mlPrimFn StrHead [a] = pure $ MkPrimFnRes [SString] SChar $ \[a] => fnCall "string_head" [a]
+mlPrimFn StrTail [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "string_tail" [a]
+mlPrimFn StrIndex [s, i] = pure $ MkPrimFnRes [SString, SInt] SChar $ \[a, i] => fnCall "String.get" [a, i]
+mlPrimFn StrCons [c, s] = pure $ MkPrimFnRes [SChar, SString] SString $ \[c, s] => fnCall "string_cons" [c, s]
+mlPrimFn StrAppend [a, b] = pure $ MkPrimFnRes [SString, SString] SString $ \[a, b] => binOp "^" a b
+mlPrimFn StrReverse [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "string_reverse" [a]
+mlPrimFn StrSubstr [offset, len, s] = pure $ MkPrimFnRes [SInt, SInt, SString] SString $ \[offset, len, s] => fnCall "String.sub" [s, offset, len]
+mlPrimFn DoubleExp [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.exp" [a]
+mlPrimFn DoubleLog [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.log" [a]
+mlPrimFn DoubleSin [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.sin" [a]
+mlPrimFn DoubleCos [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.cos" [a]
+mlPrimFn DoubleTan [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.tan" [a]
+mlPrimFn DoubleASin [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.asin" [a]
+mlPrimFn DoubleACos [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.acos" [a]
+mlPrimFn DoubleATan [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.atan" [a]
+mlPrimFn DoubleSqrt [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.sqrt" [a]
+mlPrimFn DoubleFloor [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.floor" [a]
+mlPrimFn DoubleCeiling [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "Float.ceil" [a]
+mlPrimFn BelieveMe [_, _, x] = pure $ MkPrimFnRes [SErased, SErased, SOpaque] SOpaque $ \[_, _, x] => x
+mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SErased] SOpaque $ \[_, _] => fnCall "raise" [fnCall "Idris2_Exception" [show msg]]
 -- to Int
 mlPrimFn (Cast IntegerType IntType) [a] = pure $ MkPrimFnRes [SInteger] SInt $ \[a] => fnCall "Int64.to_int" [a]
 mlPrimFn (Cast Bits8Type IntType) [a] = pure $ MkPrimFnRes [SBits8] SInt $ \[a] => fnCall "Int32.to_int" [a]
@@ -269,31 +303,27 @@ mlPrimFn (Cast IntegerType Bits64Type) [a] = pure $ MkPrimFnRes [SInteger] SBits
 mlPrimFn (Cast Bits8Type Bits64Type) [a] = pure $ MkPrimFnRes [SBits8] SBits64 $ \[a] => fnCall "Int64.of_int32" [a]
 mlPrimFn (Cast Bits16Type Bits64Type) [a] = pure $ MkPrimFnRes [SBits16] SBits64 $ \[a] => fnCall "Int64.of_int32" [a]
 mlPrimFn (Cast Bits32Type Bits64Type) [a] = pure $ MkPrimFnRes [SBits32] SBits64 $ \[a] => fnCall "Int64.of_int32" [a]
-
-{-
-
-schOp (Cast IntType StringType) [x] = op "number->string" [x]
-schOp (Cast IntegerType StringType) [x] = op "number->string" [x]
-schOp (Cast Bits8Type StringType) [x] = op "number->string" [x]
-schOp (Cast Bits16Type StringType) [x] = op "number->string" [x]
-schOp (Cast Bits32Type StringType) [x] = op "number->string" [x]
-schOp (Cast Bits64Type StringType) [x] = op "number->string" [x]
-schOp (Cast DoubleType StringType) [x] = op "number->string" [x]
-schOp (Cast CharType StringType) [x] = op "string" [x]
-
-schOp (Cast IntegerType DoubleType) [x] = op "exact->inexact" [x]
-schOp (Cast IntType DoubleType) [x] = op "exact->inexact" [x]
-schOp (Cast StringType DoubleType) [x] = op "cast-string-double" [x]
-
-schOp (Cast IntType CharType) [x] = op "cast-int-char" [x]
-
-schOp (Cast from to) [x] = "(blodwen-error-quit \"Invalid cast " ++ show from ++ "->" ++ show to ++ "\")"
--}
-
+-- to String
+mlPrimFn (Cast IntType StringType) [a] = pure $ MkPrimFnRes [SInt] SString $ \[a] => fnCall "string_of_int" [a]
+mlPrimFn (Cast IntegerType StringType) [a] = pure $ MkPrimFnRes [SInteger] SString $ \[a] => fnCall "Int64.to_string" [a]
+mlPrimFn (Cast Bits8Type StringType) [a] = pure $ MkPrimFnRes [SBits8] SString $ \[a] => fnCall "Int32.to_string" [a]
+mlPrimFn (Cast Bits16Type StringType) [a] = pure $ MkPrimFnRes [SBits16] SString $ \[a] => fnCall "Int32.to_string" [a]
+mlPrimFn (Cast Bits32Type StringType) [a] = pure $ MkPrimFnRes [SBits32] SString $ \[a] => fnCall "Int32.to_string" [a]
+mlPrimFn (Cast Bits64Type StringType) [a] = pure $ MkPrimFnRes [SBits64] SString $ \[a] => fnCall "Int64.to_string" [a]
+mlPrimFn (Cast DoubleType StringType) [a] = pure $ MkPrimFnRes [SDouble] SString $ \[a] => fnCall "string_of_float" [a]
+mlPrimFn (Cast CharType StringType) [a] = pure $ MkPrimFnRes [SChar] SString $ \[a] => fnCall "String.make" ["1", a]
+-- to Double
+mlPrimFn (Cast IntType DoubleType) [a] = pure $ MkPrimFnRes [SInt] SDouble $ \[a] => fnCall "float_of_int" [a]
+mlPrimFn (Cast IntegerType DoubleType) [a] = pure $ MkPrimFnRes [SInteger] SDouble $ \[a] => fnCall "Int64.of_string" [a]
+mlPrimFn (Cast StringType DoubleType) [a] = pure $ MkPrimFnRes [SString] SDouble $ \[a] => fnCall "float_of_string" [a]
+-- to char
+mlPrimFn (Cast IntType CharType) [a] = pure $ MkPrimFnRes [SInt] SChar $ \[a] => fnCall "char_of_int" [a]
+mlPrimFn (Cast from to) _ = throw . InternalError $ "Invalid cast " ++ show from ++ " -> " ++ show to
 mlPrimFn fn args = throw . InternalError $ "Unsupported primitive function " ++ show fn ++ " with args: " ++ show args
 
 
 mutual
+    export
     castedExpr : {auto di : DefInfos} ->
                  {auto funArgs : NameMap SType } ->
                  SType ->
@@ -319,10 +349,10 @@ mutual
             type = SOpaque
         in pure $ MkMLExpr source type
     mlExpr (NmLam fc x expr) = do
-        expr' <- mlExpr expr
-        let source = "(as_opaque (fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> Obj.magic ("
+        expr' <- castedExpr SOpaque expr
+        let source = "(as_opaque (fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> "
                 ++ expr'.source
-                ++ ")))"
+                ++ "))"
             type = SOpaque
         pure $ MkMLExpr source type
     mlExpr (NmLet fc x rhs expr) = do
@@ -337,7 +367,8 @@ mutual
         case lookup name di of
             Just tyInfo => do
                 args <- traverse (uncurry castedExpr) (tyInfo.argTypes `zip` args)
-                let call = fnCall (mlName name) (map source args)
+                let args' = if isNil args then [erased] else args
+                let call = fnCall (mlName name) (map source args')
                 pure $ MkMLExpr call tyInfo.restType
                 
             Nothing => throw $ InternalError ("Unsupported function " ++ show name)
@@ -345,8 +376,9 @@ mutual
     mlExpr (NmApp fc base args) = do
         base' <- mlExpr base
         args' <- traverse mlExpr args
+        let args'' = if isNil args then [erased] else args'
 
-        let src = fnCall "hint_opaque" [fnCall "as_fun" (base'.source :: map source args')]
+        let src = fnCall "hint_opaque" [fnCall "as_fun" (base'.source :: map source args'')]
             type = SOpaque
         pure $ MkMLExpr src type
 
@@ -370,11 +402,96 @@ mutual
         let src = res.printer (map source args')
         pure $ MkMLExpr src res.retType
 
-    mlExpr (NmExtPrim fc p xs) = pure empty --?mlExpr_rhs_8
-    mlExpr (NmForce fc x) = pure empty --?mlExpr_rhs_9
-    mlExpr (NmDelay fc x) = pure empty --?mlExpr_rhs_10
-    mlExpr (NmConCase fc sc xs x) = pure empty --?mlExpr_rhs_11
-    mlExpr (NmConstCase fc sc xs x) = pure empty --?mlExpr_rhs_12
+    mlExpr (NmExtPrim fc name args) = do
+        coreLift $ putStrLn $ "ExtPrim: " ++ show name
+        coreLift $ putStrLn $ "   args: " ++ show args
+        pure empty -- ?mlExpr_rhs_8
+    mlExpr (NmForce fc expr) = do
+        expr' <- mlExpr expr
+        let src = fnCall "Lazy.force" [fnCall "as_lazy" [expr'.source]]
+        pure $ MkMLExpr src SOpaque
+    mlExpr (NmDelay fc expr) = do
+        expr' <- mlExpr expr
+        let src = fnCall "as_opaque" [fnCall "lazy" [expr'.source]]
+        pure $ MkMLExpr src SOpaque
+    mlExpr (NmConCase fc expr alts def) = do
+        expr' <- mlExpr expr
+        alts' <- traverse alt alts
+        def' <- case def of
+            Just e => do
+                e' <- castedExpr SOpaque e
+                pure $ "| _ -> " ++ e'.source
+            Nothing => pure ""
+        let src = "(match (as_variant " ++ expr'.source ++ ") with " ++ showSep " " alts' ++ def' ++ ")"
+        pure $ MkMLExpr src SOpaque
+        where
+            alt : {auto di : DefInfos} ->
+                  {auto funArgs : NameMap SType } ->
+                  NamedConAlt ->
+                  Core String
+            alt (MkNConAlt name tag names expr) = do
+                let numNames = length names
+                let tag' = fromMaybe 0 tag
+                let src = "| (" ++ show tag' ++ ", fields') -> "
+                case lookup name di of
+                    Just info => do
+                        let fieldTypes = filter (/= SErased) info.argTypes
+                            ty = showSep " * " (map ocamlTypeName fieldTypes)
+                            ty' = case numNames of
+                                0 => "unit"
+                                1 => ty
+                                _ => "(" ++ ty ++ ")"
+                            pat = showSep ", " (map mlName names)
+                            pat' = if numNames == 1 then pat else "(" ++ pat ++ ")"
+                            binds = "let " ++ pat' ++ " : " ++ ty' ++ " = Obj.magic fields' in "
+                            funArgs' = fromList (names `zip` fieldTypes)
+                            
+                        expr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque expr
+                        pure (src ++ binds ++ expr'.source)
+                    Nothing => do
+                        let len = length names
+                            fieldTypes = replicate len SOpaque
+                            ty = showSep " * " (map ocamlTypeName fieldTypes)
+                            ty' = case numNames of
+                                0 => "unit"
+                                1 => ty
+                                _ => "(" ++ ty ++ ")"
+                            pat = showSep ", " (map mlName names)
+                            pat' = if numNames == 1 then pat else "(" ++ pat ++ ")"
+                            binds = "let " ++ pat' ++ " : " ++ ty' ++ " = Obj.magic fields' in "
+                            funArgs' = fromList (names `zip` fieldTypes)
+
+                        expr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque expr
+                        pure (src ++ binds ++ expr'.source)
+
+    mlExpr (NmConstCase fc expr alts def) = do
+        alts' <- traverse alt alts
+        def' <- case def of
+            Just e => do
+                e' <- castedExpr SOpaque e
+                pure $ "| _ -> " ++ e'.source
+            Nothing => pure ""
+        
+        let arms = map snd alts'
+            constTy = map fst alts'
+
+        expr' <- case constTy of
+                    [] => castedExpr SOpaque expr
+                    (t::_) => castedExpr t expr
+
+        let src = "(match " ++ expr'.source ++ " with " ++ showSep " " arms ++ def' ++ ")"
+        pure $ MkMLExpr src SOpaque
+        where
+            alt : {auto di : DefInfos} ->
+                {auto funArgs : NameMap SType } ->
+                NamedConstAlt ->
+                Core (SType, String)
+            alt (MkNConstAlt const expr) = do
+                const' <- mlPrimVal const
+                expr' <- castedExpr {di=di} {funArgs=funArgs} SOpaque expr
+                let src = "| " ++ const'.source ++ " -> " ++ expr'.source
+                pure $ (const'.type, src)
+
     mlExpr (NmPrimVal fc val) = mlPrimVal val
     mlExpr (NmErased fc) = pure $ MkMLExpr "()" SErased
     mlExpr (NmCrash fc x) = 
