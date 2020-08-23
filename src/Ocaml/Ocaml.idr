@@ -30,13 +30,13 @@ mlDef name (MkNmFun args expr) = do
     Just info <- pure $ lookup name di
         | Nothing => throw $ InternalError $ "No Extracted type for function " ++ show name
     
-    let args' = info.argTypes `zip` args
+    let args' = args `zip` info.argTypes
         ret = info.restType
 
-    let argDecls = showSep " " $ map (\(ty, n) => "(" ++ mlName n ++ " : " ++ ocamlTypeName ty ++ ")") args'
+    let argDecls = showSep " " $ map (\(n, ty) => "(" ++ mlName n ++ " : " ++ ocamlTypeName ty ++ ")") args'
         header = "and " ++ mlName name ++ " " ++ argDecls ++ " : " ++ ocamlTypeName ret ++ " = "
     
-    code <- mlExpr {funArgs = empty} expr
+    code <- mlExpr {funArgs = fromList args'} expr
     pure $ header ++ code.source ++ "\n\n"
     
 mlDef name (MkNmCon tag arity nt) = pure ""
@@ -46,7 +46,7 @@ mlDef name (MkNmError msg) = pure ""
 mainFunc : {auto di : DefInfos} -> NamedCExp -> Core String
 mainFunc expr = do
     code <- mlExpr {funArgs = empty} expr
-    pure $ "let main = " ++ code.source ++ ";;"
+    pure $ "and main () = " ++ code.source ++ ";;\n\nmain ();;"
 
 
 ||| OCaml implementation of the `compileExpr` interface.
