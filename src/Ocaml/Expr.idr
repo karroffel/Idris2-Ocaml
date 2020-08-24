@@ -88,7 +88,7 @@ export
 ocamlTypeName : SType -> String
 ocamlTypeName SErased = "unit"
 ocamlTypeName SInt = "int"
-ocamlTypeName SInteger = "int64"
+ocamlTypeName SInteger = "Z.t"
 ocamlTypeName SBits8 = "int"
 ocamlTypeName SBits16 = "int"
 ocamlTypeName SBits32 = "int"
@@ -152,9 +152,21 @@ mlString s = "\"" ++ (concatMap okchar (unpack s)) ++ "\""
                             other => "\\u{" ++ asHex (cast {to=Int} c) ++ "}"
 
 
+
+binOp : (op : String) -> (a, b : String) -> String
+binOp op a b = "(" ++ a ++ " " ++ op ++ " " ++ b ++ ")"
+
+fnCall : (fn : String) -> (args : List String) -> String
+fnCall fn args = "(" ++ fn ++ " " ++ showSep " " args ++ ")"
+
+boolOp : (op : String) -> (a, b : String) -> String
+boolOp op a b = fnCall "int_of_bool" [binOp op a b]
+                            
+
+
 mlPrimVal : Constant -> Core MLExpr
 mlPrimVal (I x) = pure $ MkMLExpr (show x) SInt
-mlPrimVal (BI x) = pure $ MkMLExpr (show x ++ "L") SInteger
+mlPrimVal (BI x) = pure $ MkMLExpr (fnCall "Z.of_string" [mlString (show x)]) SInteger
 mlPrimVal (B8 x) = pure $ MkMLExpr (show x) SBits8
 mlPrimVal (B16 x) = pure $ MkMLExpr (show x) SBits16
 mlPrimVal (B32 x) = pure $ MkMLExpr (show x) SBits32
@@ -165,14 +177,19 @@ mlPrimVal (Db x) = pure $ MkMLExpr (show x) SDouble
 mlPrimVal WorldVal = pure $ MkMLExpr "()" SWorld
 mlPrimVal val = throw . InternalError $ "Unsupported primitive value: " ++ show val
 
-binOp : (op : String) -> (a, b : String) -> String
-binOp op a b = "(" ++ a ++ " " ++ op ++ " " ++ b ++ ")"
+mlPrimValPattern : Constant -> Core (String, SType)
+mlPrimValPattern (I x) = pure (show x, SInt)
+mlPrimValPattern (BI x) = pure (mlString (show x), SInteger)
+mlPrimValPattern (B8 x) = pure (show x, SBits8)
+mlPrimValPattern (B16 x) = pure (show x, SBits16)
+mlPrimValPattern (B32 x) = pure (show x, SBits32)
+mlPrimValPattern (B64 x) = pure (show x ++ "L", SBits64)
+mlPrimValPattern (Str x) = pure (mlString x, SString)
+mlPrimValPattern (Ch x) = pure (mlChar x, SChar)
+mlPrimValPattern (Db x) = pure (show x, SDouble)
+mlPrimValPattern WorldVal = pure ("()", SWorld)
+mlPrimValPattern val = throw . InternalError $ "Unsupported primitive in pattern: " ++ show val
 
-fnCall : (fn : String) -> (args : List String) -> String
-fnCall fn args = "(" ++ fn ++ " " ++ showSep " " args ++ ")"
-
-boolOp : (op : String) -> (a, b : String) -> String
-boolOp op a b = fnCall "int_of_bool" [binOp op a b]
 
 record PrimFnRes (arity : Nat) where
     constructor MkPrimFnRes
@@ -185,50 +202,50 @@ binaryPrimFn ty fn = pure $ MkPrimFnRes (replicate arity ty) ty fn
 
 mlPrimFn : PrimFn arity -> Vect arity NamedCExp -> Core (PrimFnRes arity)
 mlPrimFn (Add IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "+" a b
-mlPrimFn (Add IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.add" [a, b]
+mlPrimFn (Add IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.add" [a, b]
 mlPrimFn (Add Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "+" a b
 mlPrimFn (Add Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "+" a b
 mlPrimFn (Add Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "+" a b
 mlPrimFn (Add Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.add" [a, b]
 mlPrimFn (Add DoubleType) [a, b] = binaryPrimFn SDouble $ \[a, b] => binOp "+." a b
 mlPrimFn (Sub IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "-" a b
-mlPrimFn (Sub IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.sub" [a, b]
+mlPrimFn (Sub IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.sub" [a, b]
 mlPrimFn (Sub Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "-" a b
 mlPrimFn (Sub Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "-" a b
 mlPrimFn (Sub Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "-" a b
 mlPrimFn (Sub Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.sub" [a, b]
 mlPrimFn (Sub DoubleType) [a, b] = binaryPrimFn SDouble $ \[a, b] => binOp "-." a b
 mlPrimFn (Mul IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "*" a b
-mlPrimFn (Mul IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.mul" [a, b]
+mlPrimFn (Mul IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.mul" [a, b]
 mlPrimFn (Mul Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "*" a b
 mlPrimFn (Mul Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "*" a b
 mlPrimFn (Mul Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "*" a b
 mlPrimFn (Mul Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.mul" [a, b]
 mlPrimFn (Mul DoubleType) [a, b] = binaryPrimFn SDouble $ \[a, b] => binOp "*." a b
 mlPrimFn (Div IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "/" a b
-mlPrimFn (Div IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.div" [a, b]
+mlPrimFn (Div IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.div" [a, b]
 mlPrimFn (Div Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "/" a b
 mlPrimFn (Div Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "/" a b
 mlPrimFn (Div Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "/" a b
 mlPrimFn (Div Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.unsigned_div" [a, b]
 mlPrimFn (Div DoubleType) [a, b] = binaryPrimFn SDouble $ \[a, b] => binOp "/." a b
 mlPrimFn (Mod IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "mod" a b
-mlPrimFn (Mod IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.rem" [a, b]
+mlPrimFn (Mod IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.rem" [a, b]
 mlPrimFn (Mod Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "mod" a b
 mlPrimFn (Mod Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "mod" a b
 mlPrimFn (Mod Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "mod" a b
 mlPrimFn (Mod Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.unsigned_rem" [a, b]
 mlPrimFn (Neg IntType) [a] = pure $ MkPrimFnRes [SInt] SInt $ \[a] => fnCall "-" [a]
-mlPrimFn (Neg IntegerType) [a] = pure $ MkPrimFnRes [SInteger] SInteger $ \[a] => fnCall "Int64.neg" [a]
+mlPrimFn (Neg IntegerType) [a] = pure $ MkPrimFnRes [SInteger] SInteger $ \[a] => fnCall "Z.neg" [a]
 mlPrimFn (Neg DoubleType) [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "-." [a]
 mlPrimFn (ShiftL IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "lsl" a b
-mlPrimFn (ShiftL IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.shift_left" [a, fnCall "Int64.to_int" [b]]
+mlPrimFn (ShiftL IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.shift_left" [a, fnCall "Z.to_int" [b]]
 mlPrimFn (ShiftL Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "lsl" a b
 mlPrimFn (ShiftL Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "lsl" a b
 mlPrimFn (ShiftL Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "lsl" a b
 mlPrimFn (ShiftL Bits64Type) [a, b] = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.shift_left" [a, fnCall "Int64.to_int" [b]]
 mlPrimFn (ShiftR IntType) [a, b] = binaryPrimFn SInt $ \[a, b] => binOp "lsr" a b
-mlPrimFn (ShiftR IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Int64.shift_right" [a, fnCall "Int64.to_int" [b]]
+mlPrimFn (ShiftR IntegerType) [a, b] = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.shift_right" [a, fnCall "Z.to_int" [b]]
 mlPrimFn (ShiftR Bits8Type) [a, b] = binaryPrimFn SBits8 $ \[a, b] => binOp "lsr" a b
 mlPrimFn (ShiftR Bits16Type) [a, b] = binaryPrimFn SBits16 $ \[a, b] => binOp "lsr" a b
 mlPrimFn (ShiftR Bits32Type) [a, b] = binaryPrimFn SBits32 $ \[a, b] => binOp "lsr" a b
@@ -263,7 +280,7 @@ mlPrimFn DoubleCeiling [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCa
 mlPrimFn BelieveMe [_, _, x] = pure $ MkPrimFnRes [SErased, SErased, SOpaque] SOpaque $ \[_, _, x] => x
 mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SErased] SOpaque $ \[_, _] => fnCall "raise" [fnCall "Idris2_Exception" [show msg]]
 -- to Int
-mlPrimFn (Cast IntegerType IntType) [a] = pure $ MkPrimFnRes [SInteger] SInt $ \[a] => fnCall "Int64.to_int" [a]
+mlPrimFn (Cast IntegerType IntType) [a] = pure $ MkPrimFnRes [SInteger] SInt $ \[a] => fnCall "Z.to_int" [a]
 mlPrimFn (Cast Bits8Type IntType) [a] = pure $ MkPrimFnRes [SBits8] SInt $ \[a] => a
 mlPrimFn (Cast Bits16Type IntType) [a] = pure $ MkPrimFnRes [SBits16] SInt $ \[a] => a
 mlPrimFn (Cast Bits32Type IntType) [a] = pure $ MkPrimFnRes [SBits32] SInt $ \[a] => a
@@ -271,41 +288,41 @@ mlPrimFn (Cast DoubleType IntType) [a] = pure $ MkPrimFnRes [SDouble] SInt $ \[a
 mlPrimFn (Cast StringType IntType) [a] = pure $ MkPrimFnRes [SString] SInt $ \[a] => fnCall "int_of_string" [a]
 mlPrimFn (Cast CharType IntType) [a] = pure $ MkPrimFnRes [SChar] SInt $ \[a] => fnCall "int_of_char" [a]
 -- to Integer
-mlPrimFn (Cast IntType IntegerType) [a] = pure $ MkPrimFnRes [SInt] SInteger $ \[a] => fnCall "Int64.of_int" [a]
-mlPrimFn (Cast Bits8Type IntegerType) [a] = pure $ MkPrimFnRes [SBits8] SInteger $ \[a] => fnCall "Int64.of_int" [a]
-mlPrimFn (Cast Bits16Type IntegerType) [a] = pure $ MkPrimFnRes [SBits16] SInteger $ \[a] => fnCall "Int64.of_int" [a]
-mlPrimFn (Cast Bits32Type IntegerType) [a] = pure $ MkPrimFnRes [SBits32] SInteger $ \[a] => fnCall "Int64.of_int" [a]
-mlPrimFn (Cast Bits64Type IntegerType) [a] = pure $ MkPrimFnRes [SBits64] SInteger $ \[a] => a
-mlPrimFn (Cast DoubleType IntegerType) [a] = pure $ MkPrimFnRes [SDouble] SInteger $ \[a] => fnCall "Int64.of_float" [a]
-mlPrimFn (Cast CharType IntegerType) [a] = pure $ MkPrimFnRes [SChar] SInteger $ \[a] => fnCall "Int64.of_int" [fnCall "int_of_char" [a]]
-mlPrimFn (Cast StringType IntegerType) [a] = pure $ MkPrimFnRes [SString] SInteger $ \[a] => fnCall "Int64.of_string" [a]
+mlPrimFn (Cast IntType IntegerType) [a] = pure $ MkPrimFnRes [SInt] SInteger $ \[a] => fnCall "Z.of_int" [a]
+mlPrimFn (Cast Bits8Type IntegerType) [a] = pure $ MkPrimFnRes [SBits8] SInteger $ \[a] => fnCall "Z.of_int" [a]
+mlPrimFn (Cast Bits16Type IntegerType) [a] = pure $ MkPrimFnRes [SBits16] SInteger $ \[a] => fnCall "Z.of_int" [a]
+mlPrimFn (Cast Bits32Type IntegerType) [a] = pure $ MkPrimFnRes [SBits32] SInteger $ \[a] => fnCall "Z.of_int" [a]
+mlPrimFn (Cast Bits64Type IntegerType) [a] = pure $ MkPrimFnRes [SBits64] SInteger $ \[a] => fnCall "Z.of_int64" [a]
+mlPrimFn (Cast DoubleType IntegerType) [a] = pure $ MkPrimFnRes [SDouble] SInteger $ \[a] => fnCall "Z.of_float" [a]
+mlPrimFn (Cast CharType IntegerType) [a] = pure $ MkPrimFnRes [SChar] SInteger $ \[a] => fnCall "Z.of_int" [fnCall "int_of_char" [a]]
+mlPrimFn (Cast StringType IntegerType) [a] = pure $ MkPrimFnRes [SString] SInteger $ \[a] => fnCall "Z.of_string" [a]
 -- to Bits8
 mlPrimFn (Cast IntType Bits8Type) [a] = pure $ MkPrimFnRes [SInt] SBits8 $ \[a] => a
-mlPrimFn (Cast IntegerType Bits8Type) [a] = pure $ MkPrimFnRes [SInteger] SBits8 $ \[a] => fnCall "Int64.to_int" [a]
+mlPrimFn (Cast IntegerType Bits8Type) [a] = pure $ MkPrimFnRes [SInteger] SBits8 $ \[a] => fnCall "Z.to_int" [a]
 mlPrimFn (Cast Bits16Type Bits8Type) [a] = pure $ MkPrimFnRes [SBits16] SBits8 $ \[a] => a -- TODO handle overflow
 mlPrimFn (Cast Bits32Type Bits8Type) [a] = pure $ MkPrimFnRes [SBits32] SBits8 $ \[a] => a -- TODO handle overflow
 mlPrimFn (Cast Bits64Type Bits8Type) [a] = pure $ MkPrimFnRes [SBits64] SBits8 $ \[a] => fnCall "Int64.to_int" [a]
 -- to Bits16
 mlPrimFn (Cast IntType Bits16Type) [a] = pure $ MkPrimFnRes [SInt] SBits16 $ \[a] => a -- TODO handle overflow
-mlPrimFn (Cast IntegerType Bits16Type) [a] = pure $ MkPrimFnRes [SInteger] SBits16 $ \[a] => fnCall "Int64.to_int" [a]
+mlPrimFn (Cast IntegerType Bits16Type) [a] = pure $ MkPrimFnRes [SInteger] SBits16 $ \[a] => fnCall "Z.to_int" [a]
 mlPrimFn (Cast Bits8Type Bits16Type) [a] = pure $ MkPrimFnRes [SBits8] SBits16 $ \[a] => a
 mlPrimFn (Cast Bits32Type Bits16Type) [a] = pure $ MkPrimFnRes [SBits32] SBits16 $ \[a] => a -- TODO handle overflow
 mlPrimFn (Cast Bits64Type Bits16Type) [a] = pure $ MkPrimFnRes [SBits64] SBits16 $ \[a] => fnCall "Int64.to_int" [a] -- TODO handle overflow
 -- to Bits32
 mlPrimFn (Cast IntType Bits32Type) [a] = pure $ MkPrimFnRes [SInt] SBits32 $ \[a] => a
-mlPrimFn (Cast IntegerType Bits32Type) [a] = pure $ MkPrimFnRes [SInteger] SBits32 $ \[a] => fnCall "Int64.to_int" [a]
+mlPrimFn (Cast IntegerType Bits32Type) [a] = pure $ MkPrimFnRes [SInteger] SBits32 $ \[a] => fnCall "Z.to_int" [a]
 mlPrimFn (Cast Bits8Type Bits32Type) [a] = pure $ MkPrimFnRes [SBits8] SBits32 $ \[a] => a
 mlPrimFn (Cast Bits16Type Bits32Type) [a] = pure $ MkPrimFnRes [SBits16] SBits32 $ \[a] => a
 mlPrimFn (Cast Bits64Type Bits32Type) [a] = pure $ MkPrimFnRes [SBits64] SBits32 $ \[a] => fnCall "Int64.to_int" [a]
 -- to Bits64
 mlPrimFn (Cast IntType Bits64Type) [a] = pure $ MkPrimFnRes [SInt] SBits64 $ \[a] => fnCall "Int64.of_int" [a]
-mlPrimFn (Cast IntegerType Bits64Type) [a] = pure $ MkPrimFnRes [SInteger] SBits64 $ \[a] => a -- TODO handle overflow
+mlPrimFn (Cast IntegerType Bits64Type) [a] = pure $ MkPrimFnRes [SInteger] SBits64 $ \[a] => fnCall "Z.of_int" [a] -- TODO handle overflow
 mlPrimFn (Cast Bits8Type Bits64Type) [a] = pure $ MkPrimFnRes [SBits8] SBits64 $ \[a] => fnCall "Int64.of_int" [a]
 mlPrimFn (Cast Bits16Type Bits64Type) [a] = pure $ MkPrimFnRes [SBits16] SBits64 $ \[a] => fnCall "Int64.of_int" [a]
 mlPrimFn (Cast Bits32Type Bits64Type) [a] = pure $ MkPrimFnRes [SBits32] SBits64 $ \[a] => fnCall "Int64.of_int" [a]
 -- to String
 mlPrimFn (Cast IntType StringType) [a] = pure $ MkPrimFnRes [SInt] SString $ \[a] => fnCall "string_of_int" [a]
-mlPrimFn (Cast IntegerType StringType) [a] = pure $ MkPrimFnRes [SInteger] SString $ \[a] => fnCall "Int64.to_string" [a]
+mlPrimFn (Cast IntegerType StringType) [a] = pure $ MkPrimFnRes [SInteger] SString $ \[a] => fnCall "Z.to_string" [a]
 mlPrimFn (Cast Bits8Type StringType) [a] = pure $ MkPrimFnRes [SBits8] SString $ \[a] => fnCall "string_of_int" [a]
 mlPrimFn (Cast Bits16Type StringType) [a] = pure $ MkPrimFnRes [SBits16] SString $ \[a] => fnCall "string_of_int" [a]
 mlPrimFn (Cast Bits32Type StringType) [a] = pure $ MkPrimFnRes [SBits32] SString $ \[a] => fnCall "string_of_int" [a]
@@ -314,7 +331,7 @@ mlPrimFn (Cast DoubleType StringType) [a] = pure $ MkPrimFnRes [SDouble] SString
 mlPrimFn (Cast CharType StringType) [a] = pure $ MkPrimFnRes [SChar] SString $ \[a] => fnCall "String.make" ["1", a]
 -- to Double
 mlPrimFn (Cast IntType DoubleType) [a] = pure $ MkPrimFnRes [SInt] SDouble $ \[a] => fnCall "float_of_int" [a]
-mlPrimFn (Cast IntegerType DoubleType) [a] = pure $ MkPrimFnRes [SInteger] SDouble $ \[a] => fnCall "Int64.of_string" [a]
+mlPrimFn (Cast IntegerType DoubleType) [a] = pure $ MkPrimFnRes [SInteger] SDouble $ \[a] => fnCall "Z.to_float" [a]
 mlPrimFn (Cast StringType DoubleType) [a] = pure $ MkPrimFnRes [SString] SDouble $ \[a] => fnCall "float_of_string" [a]
 -- to char
 mlPrimFn (Cast IntType CharType) [a] = pure $ MkPrimFnRes [SInt] SChar $ \[a] => fnCall "char_of_int" [a]
@@ -477,8 +494,12 @@ mutual
         expr' <- case constTy of
                     [] => castedExpr SOpaque expr
                     (t::_) => castedExpr t expr
+        
+        let matchExpr = if expr'.type == SInteger
+                            then fnCall "Z.to_string" [expr'.source]
+                            else expr'.source
 
-        let src = "(match " ++ expr'.source ++ " with " ++ showSep " " arms ++ def' ++ ")"
+        let src = "(match " ++ matchExpr ++ " with " ++ showSep " " arms ++ def' ++ ")"
         pure $ MkMLExpr src SOpaque
         where
             alt : {auto di : DefInfos} ->
@@ -486,10 +507,10 @@ mutual
                 NamedConstAlt ->
                 Core (SType, String)
             alt (MkNConstAlt const expr) = do
-                const' <- mlPrimVal const
+                (pat, ty) <- mlPrimValPattern const
                 expr' <- castedExpr {di=di} {funArgs=funArgs} SOpaque expr
-                let src = "| " ++ const'.source ++ " -> " ++ expr'.source
-                pure $ (const'.type, src)
+                let src = "| " ++ pat ++ " -> " ++ expr'.source
+                pure $ (ty, src)
 
     mlExpr (NmPrimVal fc val) = mlPrimVal val
     mlExpr (NmErased fc) = pure erased

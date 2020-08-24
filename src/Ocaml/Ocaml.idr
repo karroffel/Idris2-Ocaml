@@ -25,8 +25,8 @@ import Ocaml.Expr
 import Ocaml.DefInfo
 import Ocaml.Foreign
 
-findOcaml : IO String
-findOcaml = pure "ocamlopt" -- TODO
+findOcamlFind : IO String
+findOcamlFind = pure "ocamlfind" -- TODO
 
 
 mlDef : {auto di : DefInfos} ->
@@ -106,8 +106,8 @@ compileExpr mkexec c tmpDir outputDir tm outfile = do
 
     ok <- the (Core Int) $ if mkexec
         then do
-            ocaml <- coreLift findOcaml
-            coreLift . system $ ocaml ++ " -w -26-8 " ++ outMlAbs ++ " -o " ++ outBinAbs
+            ocamlFind <- coreLift findOcamlFind
+            coreLift . system $ ocamlFind ++ " ocamlopt -package zarith -linkpkg -w -26-8 " ++ outMlAbs ++ " -o " ++ outBinAbs
         else
             pure 0
     

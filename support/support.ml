@@ -10,7 +10,7 @@ let as_opaque : 'a -> idr2_opaque = Obj.magic;;
 
 let as_erased : 'a -> unit = Obj.magic;;
 let as_int : 'a -> int = Obj.magic;;
-let as_bint : 'a -> int64 = Obj.magic;;
+let as_bint : 'a -> Z.t = Obj.magic;;
 let as_bits8 : 'a -> int = Obj.magic;;
 let as_bits16 : 'a -> int = Obj.magic;;
 let as_bits32 : 'a -> int = Obj.magic;;
@@ -24,7 +24,7 @@ let as_world : 'a -> unit = Obj.magic;;
 
 let hint_erased (x : unit) : unit = x;;
 let hint_int (x : int) : int = x;;
-let hint_bint (x : int64) : int64 = x;;
+let hint_bint (x : Z.t) : Z.t = x;;
 let hint_bits8 (x : int) : int = x;;
 let hint_bits16 (x : int) : int = x;;
 let hint_bits32 (x : int) : int = x;;
@@ -37,6 +37,10 @@ let hint_opaque (x : idr2_opaque) : idr2_opaque = x;;
 
 
 (* Primitive functions *)
+
+
+
+
 
 let int_of_bool (b : bool) : int = Bool.to_int b;;
 
