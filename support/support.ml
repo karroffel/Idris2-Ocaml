@@ -38,8 +38,25 @@ let hint_opaque (x : idr2_opaque) : idr2_opaque = x;;
 
 (* Primitive functions *)
 
+let cast_bint_int (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 63)));;;;
+let cast_bits64_int (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 63)));;;;
 
+let cast_int_bits8 (x : int) : int = x mod (1 lsl 8);;
+let cast_bint_bits8 (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 8)));;
+let cast_bits64_bits8 (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 8)));;
 
+let cast_int_bits16 (x : int) : int = x mod (1 lsl 16);;
+let cast_bint_bits16 (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 16)));;
+let cast_bits64_bits16 (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 16)));;
+
+let cast_int_bits32 (x : int) : int = x mod (1 lsl 32);;
+let cast_bint_bits32 (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 32)));;
+let cast_bits64_bits32 (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 32)));;
+
+let cast_bint_bits64 (x : Z.t) : int64 =
+  let upper_32 = Z.shift_left Z.one 32 in
+  let upper_64 = Z.shift_left upper_32 32 in
+  Z.to_int64 (Z.rem x upper_64);;
 
 
 let int_of_bool (b : bool) : int = Bool.to_int b;;

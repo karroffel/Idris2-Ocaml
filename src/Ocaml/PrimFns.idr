@@ -1,0 +1,264 @@
+module Ocaml.PrimFns
+
+import Compiler.Common
+import Compiler.CompileExpr
+
+import Core.Context
+
+import Data.Vect
+
+import Ocaml.DefInfo
+import Ocaml.Utils
+
+public export
+record PrimFnRes (arity : Nat) where
+    constructor MkPrimFnRes
+    argTypes : Vect arity SType
+    retType : SType
+    printer : Vect arity String -> String
+
+binaryPrimFn : {arity : Nat} -> SType -> (Vect arity String -> String) -> Core (PrimFnRes arity)
+binaryPrimFn ty fn = pure $ MkPrimFnRes (replicate arity ty) ty fn
+
+addFn : Constant -> Core (PrimFnRes 2)
+addFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "+" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.add" [a, b]
+        Bits8Type => pure $ \[a, b] => binOp "+" a b
+        Bits16Type => pure $ \[a, b] => binOp "+" a b
+        Bits32Type => pure $ \[a, b] => binOp "+" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.add" [a, b]
+        DoubleType => pure $ \[a, b] => binOp "+." a b
+        _ => throw . InternalError $ "Unsupported add implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+subFn : Constant -> Core (PrimFnRes 2)
+subFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "-" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.sub" [a, b]
+        Bits8Type => pure $ \[a, b] => binOp "-" a b
+        Bits16Type => pure $ \[a, b] => binOp "-" a b
+        Bits32Type => pure $ \[a, b] => binOp "-" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.sub" [a, b]
+        DoubleType => pure $ \[a, b] => binOp "-." a b
+        _ => throw . InternalError $ "Unsupported sub implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+mulFn : Constant -> Core (PrimFnRes 2)
+mulFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "*" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.mul" [a, b]
+        Bits8Type => pure $ \[a, b] => binOp "*" a b
+        Bits16Type => pure $ \[a, b] => binOp "*" a b
+        Bits32Type => pure $ \[a, b] => binOp "*" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.mul" [a, b]
+        DoubleType => pure $ \[a, b] => binOp "*." a b
+        _ => throw . InternalError $ "Unsupported mul implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+divFn : Constant -> Core (PrimFnRes 2)
+divFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "/" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.div" [a, b]
+        Bits8Type => pure $ \[a, b] => binOp "/" a b
+        Bits16Type => pure $ \[a, b] => binOp "/" a b
+        Bits32Type => pure $ \[a, b] => binOp "/" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.unsigned_div" [a, b]
+        DoubleType => pure $ \[a, b] => binOp "/." a b
+        _ => throw . InternalError $ "Unsupported div implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+modFn : Constant -> Core (PrimFnRes 2)
+modFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "mod" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.rem" [a, b]
+        Bits8Type => pure $ \[a, b] => binOp "mod" a b
+        Bits16Type => pure $ \[a, b] => binOp "mod" a b
+        Bits32Type => pure $ \[a, b] => binOp "mod" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.unsigned_rem" [a, b]
+        _ => throw . InternalError $ "Unsupported mod implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+shiftLFn : Constant -> Core (PrimFnRes 2)
+shiftLFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "lsl" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.shift_left" [a, fnCall "Z.to_int" [b]]
+        Bits8Type => pure $ \[a, b] => binOp "lsl" a b
+        Bits16Type => pure $ \[a, b] => binOp "lsl" a b
+        Bits32Type => pure $ \[a, b] => binOp "lsl" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.shift_left" [a, fnCall "Int64.to_int" [b]]
+        _ => throw . InternalError $ "Unsupported shiftL implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+shiftRFn : Constant -> Core (PrimFnRes 2)
+shiftRFn ty = do
+    fn <- case ty of
+        IntType => pure $ \[a, b] => binOp "lsr" a b
+        IntegerType => pure $ \[a, b] => fnCall "Z.shift_right" [a, fnCall "Z.to_int" [b]]
+        Bits8Type => pure $ \[a, b] => binOp "lsr" a b
+        Bits16Type => pure $ \[a, b] => binOp "lsr" a b
+        Bits32Type => pure $ \[a, b] => binOp "lsr" a b
+        Bits64Type => pure $ \[a, b] => fnCall "Int64.shift_right" [a, fnCall "Int64.to_int" [b]]
+        _ => throw . InternalError $ "Unsupported shiftR implementation for type " ++ show ty
+    binaryPrimFn (stypeFromConst ty) fn
+
+castToInt : Constant -> Core (PrimFnRes 1)
+castToInt ty = do
+    fn <- case ty of
+        IntegerType => pure $ \[a] => fnCall "cast_bint_int" [a]
+        Bits8Type => pure $ \[a] => a
+        Bits16Type => pure $ \[a] => a
+        Bits32Type => pure $ \[a] => a
+        Bits64Type => pure $ \[a] => fnCall "cast_bit64_int" [a]
+        DoubleType => pure $ \[a] => fnCall "int_of_float" [a]
+        StringType => pure $ \[a] => fnCall "int_of_string" [a]
+        CharType => pure $ \[a] => fnCall "int_of_char" [a]
+        _ => throw . InternalError $ "Unsupported cast to Int implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SInt fn
+
+castToInteger : Constant -> Core (PrimFnRes 1)
+castToInteger ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "Z.of_int" [a]
+        Bits8Type => pure $ \[a] => fnCall "Z.of_int" [a]
+        Bits16Type => pure $ \[a] => fnCall "Z.of_int" [a]
+        Bits32Type => pure $ \[a] => fnCall "Z.of_int" [a]
+        Bits64Type => pure $ \[a] => fnCall "Z.of_int64" [a]
+        DoubleType => pure $ \[a] => fnCall "Z.of_float" [a]
+        CharType => pure $ \[a] => fnCall "Z.of_int" [fnCall "int_of_char" [a]]
+        StringType => pure $ \[a] => fnCall "Z.of_string" [a]
+        _ => throw . InternalError $ "Unsupported cast to Integer implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SInteger fn
+
+
+castToBits8 : Constant -> Core (PrimFnRes 1)
+castToBits8 ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "cast_int_bits8" [a]
+        IntegerType => pure $ \[a] => fnCall "cast_bint_bits8" [a]
+        Bits16Type => pure $ \[a] => fnCall "cast_int_bits8" [a]
+        Bits32Type => pure $ \[a] => fnCall "cast_int_bits8" [a]
+        Bits64Type => pure $ \[a] => fnCall "cast_bits64_bits8" [a]
+        _ => throw . InternalError $ "Unsupported cast to Bits8 implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SBits8 fn
+
+castToBits16 : Constant -> Core (PrimFnRes 1)
+castToBits16 ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "cast_int_bits16" [a]
+        IntegerType => pure $ \[a] => fnCall "cast_bint_bits16" [a]
+        Bits8Type => pure $ \[a] => a
+        Bits32Type => pure $ \[a] => fnCall "cast_int_bits16" [a]
+        Bits64Type => pure $ \[a] => fnCall "cast_bits64_bits8" [a]
+        _ => throw . InternalError $ "Unsupported cast to Bits16 implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SBits16 fn
+
+castToBits32 : Constant -> Core (PrimFnRes 1)
+castToBits32 ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "cast_int_bits32" [a]
+        IntegerType => pure $ \[a] => fnCall "cast_bint_bits32" [a]
+        Bits8Type => pure $ \[a] => a
+        Bits16Type => pure $ \[a] => a
+        Bits64Type => pure $ \[a] => fnCall "cast_bits64_bits32" [a]
+        _ => throw . InternalError $ "Unsupported cast to Bits32 implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SBits32 fn
+
+castToBits64 : Constant -> Core (PrimFnRes 1)
+castToBits64 ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "Int64.of_int" [a]
+        IntegerType => pure $ \[a] => fnCall "cast_bint_bits64" [a] -- TODO signed-ness?
+        Bits8Type => pure $ \[a] => fnCall "Int64.of_int" [a]
+        Bits16Type => pure $ \[a] => fnCall "Int64.of_int" [a]
+        Bits32Type => pure $ \[a] => fnCall "Int64.of_int" [a]
+        _ => throw . InternalError $ "Unsupported cast to Bits64 implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SBits64 fn
+
+castToString : Constant -> Core (PrimFnRes 1)
+castToString ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "string_of_int" [a]
+        IntegerType => pure $ \[a] => fnCall "Z.to_string" [a]
+        Bits8Type => pure $ \[a] => fnCall "string_of_int" [a]
+        Bits16Type => pure $ \[a] => fnCall "string_of_int" [a]
+        Bits32Type => pure $ \[a] => fnCall "string_of_int" [a]
+        Bits64Type => pure $ \[a] => fnCall "Int64.to_string" [a]
+        DoubleType => pure $ \[a] => fnCall "string_of_float" [a]
+        CharType => pure $ \[a] => fnCall "String.make" ["1", a]
+        _ => throw . InternalError $ "Unsupported cast to String implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SString fn
+
+castToDouble : Constant -> Core (PrimFnRes 1)
+castToDouble ty = do
+    fn <- case ty of
+        IntType => pure $ \[a] => fnCall "float_of_int" [a]
+        IntegerType => pure $ \[a] => fnCall "Z.to_float" [a]
+        StringType => pure $ \[a] => fnCall "float_of_string" [a]
+        _ => throw . InternalError $ "Unsupported cast to Double implementation for type " ++ show ty
+    pure $ MkPrimFnRes [stypeFromConst ty] SDouble fn
+
+
+doubleFn : String -> PrimFnRes 1
+doubleFn name = MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall name [a]
+
+
+export
+mlPrimFn : PrimFn arity -> Vect arity NamedCExp -> Core (PrimFnRes arity)
+mlPrimFn (Add ty) _ = addFn ty
+mlPrimFn (Sub ty) _ = subFn ty
+mlPrimFn (Mul ty) _ = mulFn ty
+mlPrimFn (Div ty) _ = divFn ty
+mlPrimFn (Mod ty) _ = modFn ty
+mlPrimFn (Neg IntType) [a] = pure $ MkPrimFnRes [SInt] SInt $ \[a] => fnCall "-" [a]
+mlPrimFn (Neg IntegerType) [a] = pure $ MkPrimFnRes [SInteger] SInteger $ \[a] => fnCall "Z.neg" [a]
+mlPrimFn (Neg DoubleType) [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "-." [a]
+mlPrimFn (ShiftL ty) _ = shiftLFn ty
+mlPrimFn (ShiftR ty) _ = shiftLFn ty
+mlPrimFn (BAnd ty) args = throw $ InternalError "unimplemented bitwise-and"
+mlPrimFn (BOr ty) args = throw $ InternalError "unimplemented bitwise-or"
+mlPrimFn (BXOr ty) args = throw $ InternalError "unimplemented bitwise-xor"
+mlPrimFn (LT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<" a b
+mlPrimFn (LTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<=" a b
+mlPrimFn (EQ ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "==" a b
+mlPrimFn (GTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">=" a b
+mlPrimFn (GT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">" a b
+mlPrimFn StrLength [a] = pure $ MkPrimFnRes [SString] SInt $ \[a] => fnCall "String.length" [a]
+mlPrimFn StrHead [a] = pure $ MkPrimFnRes [SString] SChar $ \[a] => fnCall "string_head" [a]
+mlPrimFn StrTail [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "string_tail" [a]
+mlPrimFn StrIndex [s, i] = pure $ MkPrimFnRes [SString, SInt] SChar $ \[a, i] => fnCall "String.get" [a, i]
+mlPrimFn StrCons [c, s] = pure $ MkPrimFnRes [SChar, SString] SString $ \[c, s] => fnCall "string_cons" [c, s]
+mlPrimFn StrAppend [a, b] = pure $ MkPrimFnRes [SString, SString] SString $ \[a, b] => binOp "^" a b
+mlPrimFn StrReverse [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "string_reverse" [a]
+mlPrimFn StrSubstr [offset, len, s] = pure $ MkPrimFnRes [SInt, SInt, SString] SString $ \[offset, len, s] => fnCall "String.sub" [s, offset, len]
+mlPrimFn DoubleExp _ = pure $ doubleFn "Float.exp"
+mlPrimFn DoubleLog _ = pure $ doubleFn "Float.log"
+mlPrimFn DoubleSin _ = pure $ doubleFn "Float.sin"
+mlPrimFn DoubleCos _ = pure $ doubleFn "Float.cos"
+mlPrimFn DoubleTan _ = pure $ doubleFn "Float.tan"
+mlPrimFn DoubleASin _ = pure $ doubleFn "Float.asin"
+mlPrimFn DoubleACos _ = pure $ doubleFn "Float.acos"
+mlPrimFn DoubleATan _ = pure $ doubleFn "Float.atan"
+mlPrimFn DoubleSqrt _ = pure $ doubleFn "Float.sqrt"
+mlPrimFn DoubleFloor _ = pure $ doubleFn "Float.floor"
+mlPrimFn DoubleCeiling _ = pure $ doubleFn "Float.ceil"
+mlPrimFn BelieveMe [_, _, x] = pure $ MkPrimFnRes [SErased, SErased, SOpaque] SOpaque $ \[_, _, x] => x
+mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SErased] SOpaque $ \[_, _] => fnCall "raise" [fnCall "Idris2_Exception" [show msg]]
+mlPrimFn (Cast ty IntType) _ = castToInt ty
+mlPrimFn (Cast ty IntegerType) _ = castToInteger ty
+mlPrimFn (Cast ty Bits8Type) _ = castToBits8 ty
+mlPrimFn (Cast ty Bits16Type) _ = castToBits16 ty
+mlPrimFn (Cast ty Bits32Type) _ = castToBits32 ty
+mlPrimFn (Cast ty Bits64Type) _ = castToBits64 ty
+mlPrimFn (Cast ty StringType) _ = castToString ty
+mlPrimFn (Cast ty DoubleType) _ = castToDouble ty
+mlPrimFn (Cast IntType CharType) [a] = pure $ MkPrimFnRes [SInt] SChar $ \[a] => fnCall "char_of_int" [a]
+mlPrimFn (Cast from to) _ = throw . InternalError $ "Invalid cast " ++ show from ++ " -> " ++ show to
+mlPrimFn fn args = throw . InternalError $ "Unsupported primitive function " ++ show fn ++ " with args: " ++ show args
+
