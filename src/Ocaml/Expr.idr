@@ -15,6 +15,7 @@ import Utils.Hex
 import Ocaml.DefInfo
 import Ocaml.PrimFns
 import Ocaml.Utils
+import Ocaml.Foreign
 
 
 ocamlKeywords : List String
@@ -260,10 +261,16 @@ mutual
         let src = res.printer (map source args')
         pure $ MkMLExpr src res.retType
 
-    mlExpr (NmExtPrim fc name args) = do
-        coreLift $ putStrLn $ "ExtPrim: " ++ show name
-        coreLift $ putStrLn $ "   args: " ++ show args
-        pure empty -- ?mlExpr_rhs_8
+    mlExpr (NmExtPrim fc name args) =
+        case !(exPrim name args) of
+            Just exp => pure exp
+            
+            Nothing => do
+                coreLift $ putStrLn $ "Unimplemented ExtPrim!"
+                coreLift $ putStrLn $ "ExtPrim: " ++ show name
+                coreLift $ putStrLn $ "   args: " ++ show args
+                pure empty
+
     mlExpr (NmForce fc expr) = do
         expr' <- mlExpr expr
         let src = fnCall "Lazy.force" [fnCall "as_lazy" [expr'.source]]
@@ -361,3 +368,13 @@ mutual
             type = SOpaque
         in pure $ MkMLExpr source type
 
+    exPrim : {auto di : DefInfos} ->
+             {auto funArgs : NameMap SType } ->
+             Name ->
+             List NamedCExp ->
+             Core (Maybe MLExpr)
+    exPrim name args =
+        case (show name, args) of
+            ("System.Info.prim__os", []) => do
+                pure . Just $ MkMLExpr "(idr2_sys_os ())" SString
+            _ => pure Nothing

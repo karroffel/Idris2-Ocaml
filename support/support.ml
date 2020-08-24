@@ -38,21 +38,48 @@ let hint_opaque (x : idr2_opaque) : idr2_opaque = x;;
 
 (* Primitive functions *)
 
-let cast_bint_int (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 63)));;;;
+let ensure_bits8 (x : int) : int =
+  let max = 1 lsl 8 in
+  let x' = x mod max in
+  if x' < 0
+    then max + x'
+    else x';;
+
+let ensure_bits16 (x : int) : int =
+  let max = 1 lsl 16 in
+  let x' = x mod max in
+  if x' < 0
+    then max + x'
+    else x';;
+
+let ensure_bits32 (x : int) : int =
+  let max = 1 lsl 32 in
+  let x' = x mod max in
+  if x' < 0
+    then max + x'
+    else x';;
+
+(* TODO handle signedness and overflow *)
+let cast_bint_int (x : Z.t) : int =
+  let upper = Z.shift_left Z.one (Sys.int_size) in
+  Z.to_int (Z.rem x upper);;
+
+(* TODO handle signedness and overflow *)
 let cast_bits64_int (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 63)));;;;
 
-let cast_int_bits8 (x : int) : int = x mod (1 lsl 8);;
-let cast_bint_bits8 (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 8)));;
-let cast_bits64_bits8 (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 8)));;
+let cast_int_bits8 (x : int) : int = ensure_bits8 x;;
+let cast_bint_bits8 (x : Z.t) : int = ensure_bits8 (Z.to_int (Z.rem x (Z.of_int (1 lsl 8))));;
+let cast_bits64_bits8 (x : int64) : int = ensure_bits8 (Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 8))));;
 
-let cast_int_bits16 (x : int) : int = x mod (1 lsl 16);;
-let cast_bint_bits16 (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 16)));;
-let cast_bits64_bits16 (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 16)));;
+let cast_int_bits16 (x : int) : int = ensure_bits16 x;;
+let cast_bint_bits16 (x : Z.t) : int = ensure_bits16 (Z.to_int (Z.rem x (Z.of_int (1 lsl 16))));;
+let cast_bits64_bits16 (x : int64) : int = ensure_bits16 (Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 16))));;
 
-let cast_int_bits32 (x : int) : int = x mod (1 lsl 32);;
-let cast_bint_bits32 (x : Z.t) : int = Z.to_int (Z.rem x (Z.of_int (1 lsl 32)));;
-let cast_bits64_bits32 (x : int64) : int = Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 32)));;
+let cast_int_bits32 (x : int) : int = ensure_bits32 x;;
+let cast_bint_bits32 (x : Z.t) : int = ensure_bits32 (Z.to_int (Z.rem x (Z.of_int (1 lsl 32))));;
+let cast_bits64_bits32 (x : int64) : int = ensure_bits32 (Int64.to_int (Int64.unsigned_rem x (Int64.of_int (1 lsl 32))));;
 
+(* TODO this doesn't handle signed numbers yet *)
 let cast_bint_bits64 (x : Z.t) : int64 =
   let upper_32 = Z.shift_left Z.one 32 in
   let upper_64 = Z.shift_left upper_32 32 in
@@ -71,12 +98,28 @@ let string_tail (s : string) : string =
 let string_cons (c : char) (s : string) : string =
   String.init (String.length s + 1) (fun i -> if i == 0 then c else s.[i - 1]);;
 
-
+(*
+ * IO Functions
+ *)
 
 let idr2_print_string (s : string) _ = print_string s; as_opaque ();;
+let idr2_get_string (arg_0 : unit) : idr2_opaque = as_opaque (read_line ());;
+let idr2_system (cmd : string) _ : idr2_opaque = as_opaque (Sys.command cmd);;
+
+
+(*
+ * Ext Prims
+ *)
+let idr2_sys_os () =
+  match Sys.os_type with
+  | "Unix" -> "linux"
+  | _ -> "win32";;
 
 
 
+(*
+ * Generated code
+ *)
 
 let rec start_generated_code = ()
 

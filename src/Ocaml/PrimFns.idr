@@ -20,14 +20,25 @@ record PrimFnRes (arity : Nat) where
 binaryPrimFn : {arity : Nat} -> SType -> (Vect arity String -> String) -> Core (PrimFnRes arity)
 binaryPrimFn ty fn = pure $ MkPrimFnRes (replicate arity ty) ty fn
 
+
+bits8Bound : String -> String
+bits8Bound s = fnCall "ensure_bits8" [s]
+
+bits16Bound : String -> String
+bits16Bound s = fnCall "ensure_bits16" [s]
+
+bits32Bound : String -> String
+bits32Bound s = fnCall "ensure_bits32" [s]
+
+
 addFn : Constant -> Core (PrimFnRes 2)
 addFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "+" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.add" [a, b]
-        Bits8Type => pure $ \[a, b] => binOp "+" a b
-        Bits16Type => pure $ \[a, b] => binOp "+" a b
-        Bits32Type => pure $ \[a, b] => binOp "+" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "+" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "+" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "+" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.add" [a, b]
         DoubleType => pure $ \[a, b] => binOp "+." a b
         _ => throw . InternalError $ "Unsupported add implementation for type " ++ show ty
@@ -38,9 +49,9 @@ subFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "-" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.sub" [a, b]
-        Bits8Type => pure $ \[a, b] => binOp "-" a b
-        Bits16Type => pure $ \[a, b] => binOp "-" a b
-        Bits32Type => pure $ \[a, b] => binOp "-" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "-" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "-" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "-" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.sub" [a, b]
         DoubleType => pure $ \[a, b] => binOp "-." a b
         _ => throw . InternalError $ "Unsupported sub implementation for type " ++ show ty
@@ -51,9 +62,9 @@ mulFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "*" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.mul" [a, b]
-        Bits8Type => pure $ \[a, b] => binOp "*" a b
-        Bits16Type => pure $ \[a, b] => binOp "*" a b
-        Bits32Type => pure $ \[a, b] => binOp "*" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "*" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "*" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "*" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.mul" [a, b]
         DoubleType => pure $ \[a, b] => binOp "*." a b
         _ => throw . InternalError $ "Unsupported mul implementation for type " ++ show ty
@@ -64,9 +75,9 @@ divFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "/" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.div" [a, b]
-        Bits8Type => pure $ \[a, b] => binOp "/" a b
-        Bits16Type => pure $ \[a, b] => binOp "/" a b
-        Bits32Type => pure $ \[a, b] => binOp "/" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "/" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "/" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "/" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.unsigned_div" [a, b]
         DoubleType => pure $ \[a, b] => binOp "/." a b
         _ => throw . InternalError $ "Unsupported div implementation for type " ++ show ty
@@ -77,9 +88,9 @@ modFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "mod" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.rem" [a, b]
-        Bits8Type => pure $ \[a, b] => binOp "mod" a b
-        Bits16Type => pure $ \[a, b] => binOp "mod" a b
-        Bits32Type => pure $ \[a, b] => binOp "mod" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "mod" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "mod" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "mod" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.unsigned_rem" [a, b]
         _ => throw . InternalError $ "Unsupported mod implementation for type " ++ show ty
     binaryPrimFn (stypeFromConst ty) fn
@@ -89,9 +100,9 @@ shiftLFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "lsl" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.shift_left" [a, fnCall "Z.to_int" [b]]
-        Bits8Type => pure $ \[a, b] => binOp "lsl" a b
-        Bits16Type => pure $ \[a, b] => binOp "lsl" a b
-        Bits32Type => pure $ \[a, b] => binOp "lsl" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "lsl" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "lsl" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "lsl" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.shift_left" [a, fnCall "Int64.to_int" [b]]
         _ => throw . InternalError $ "Unsupported shiftL implementation for type " ++ show ty
     binaryPrimFn (stypeFromConst ty) fn
@@ -101,9 +112,9 @@ shiftRFn ty = do
     fn <- case ty of
         IntType => pure $ \[a, b] => binOp "lsr" a b
         IntegerType => pure $ \[a, b] => fnCall "Z.shift_right" [a, fnCall "Z.to_int" [b]]
-        Bits8Type => pure $ \[a, b] => binOp "lsr" a b
-        Bits16Type => pure $ \[a, b] => binOp "lsr" a b
-        Bits32Type => pure $ \[a, b] => binOp "lsr" a b
+        Bits8Type => pure $ \[a, b] => bits8Bound $ binOp "lsr" a b
+        Bits16Type => pure $ \[a, b] => bits16Bound $ binOp "lsr" a b
+        Bits32Type => pure $ \[a, b] => bits32Bound $ binOp "lsr" a b
         Bits64Type => pure $ \[a, b] => fnCall "Int64.shift_right" [a, fnCall "Int64.to_int" [b]]
         _ => throw . InternalError $ "Unsupported shiftR implementation for type " ++ show ty
     binaryPrimFn (stypeFromConst ty) fn
@@ -174,7 +185,7 @@ castToBits64 : Constant -> Core (PrimFnRes 1)
 castToBits64 ty = do
     fn <- case ty of
         IntType => pure $ \[a] => fnCall "Int64.of_int" [a]
-        IntegerType => pure $ \[a] => fnCall "cast_bint_bits64" [a] -- TODO signed-ness?
+        IntegerType => pure $ \[a] => fnCall "cast_bint_bits64" [a]
         Bits8Type => pure $ \[a] => fnCall "Int64.of_int" [a]
         Bits16Type => pure $ \[a] => fnCall "Int64.of_int" [a]
         Bits32Type => pure $ \[a] => fnCall "Int64.of_int" [a]
@@ -189,7 +200,7 @@ castToString ty = do
         Bits8Type => pure $ \[a] => fnCall "string_of_int" [a]
         Bits16Type => pure $ \[a] => fnCall "string_of_int" [a]
         Bits32Type => pure $ \[a] => fnCall "string_of_int" [a]
-        Bits64Type => pure $ \[a] => fnCall "Int64.to_string" [a]
+        Bits64Type => pure $ \[a] => fnCall "Int64.to_string" [a] -- TODO this behaves like signed ints
         DoubleType => pure $ \[a] => fnCall "string_of_float" [a]
         CharType => pure $ \[a] => fnCall "String.make" ["1", a]
         _ => throw . InternalError $ "Unsupported cast to String implementation for type " ++ show ty

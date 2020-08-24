@@ -59,7 +59,7 @@ mlDef name (MkNmForeign ccs argTys retTy) = do
     let header = "and " ++ mlName name ++ " " ++ args' ++ " : " ++ ocamlTypeName retTy' ++ " = "
         callArgs = if isNil argTys' then ["()"] else argNames
 
-    pure $ header ++ foreignFun name ++ " " ++ showSep " " callArgs ++ "\n\n"
+    pure $ header ++ foreignFun name argTys retTy ++ " " ++ showSep " " callArgs ++ "\n\n"
 mlDef name (MkNmError msg) = pure ""
 
 mainFunc : {auto di : DefInfos} -> NamedCExp -> Core String
@@ -107,7 +107,7 @@ compileExpr mkexec c tmpDir outputDir tm outfile = do
     ok <- the (Core Int) $ if mkexec
         then do
             ocamlFind <- coreLift findOcamlFind
-            coreLift . system $ ocamlFind ++ " ocamlopt -package zarith -linkpkg -w -26-8 " ++ outMlAbs ++ " -o " ++ outBinAbs
+            coreLift . system $ ocamlFind ++ " ocamlopt -package zarith -linkpkg -w -20-26-8 " ++ outMlAbs ++ " -o " ++ outBinAbs
         else
             pure 0
     
