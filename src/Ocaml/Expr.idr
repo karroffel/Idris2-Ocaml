@@ -329,7 +329,6 @@ mutual
                  SType ->
                  NamedCExp ->
                  Core MLExpr
-    castedExpr SErased _ = pure $ MkMLExpr "()" SErased
     castedExpr ty expr = do
         expr' <- mlExpr expr
         case maybeCastFn expr'.type ty of
@@ -493,7 +492,7 @@ mutual
                 pure $ (const'.type, src)
 
     mlExpr (NmPrimVal fc val) = mlPrimVal val
-    mlExpr (NmErased fc) = pure $ MkMLExpr "()" SErased
+    mlExpr (NmErased fc) = pure erased
     mlExpr (NmCrash fc x) = 
         let source = fnCall "raise" [fnCall "Idris2_Exception" [show x]]
             type = SOpaque

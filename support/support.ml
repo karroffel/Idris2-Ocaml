@@ -38,7 +38,7 @@ let hint_opaque (x : idr2_opaque) : idr2_opaque = x;;
 
 (* Primitive functions *)
 
-let int_of_bool (b : bool) : int = Bool.to_int (Bool.not b);;
+let int_of_bool (b : bool) : int = Bool.to_int b;;
 
 let string_reverse (s : string) : string =
   let len = String.length s in
