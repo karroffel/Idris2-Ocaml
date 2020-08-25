@@ -71,9 +71,9 @@ mainFunc expr = do
 
 
 ||| OCaml implementation of the `compileExpr` interface.
-compileExpr : (mkexec : Bool) -> Ref Ctxt Defs -> (tmpDir : String) -> (outputDir : String) ->
+compileExpr : Ref Ctxt Defs -> (tmpDir : String) -> (outputDir : String) ->
     ClosedTerm -> (outfile : String) -> Core (Maybe String)
-compileExpr mkexec c tmpDir outputDir tm outfile = do
+compileExpr c tmpDir outputDir tm outfile = do
     let appDirRel = outfile ++ "_app" -- relative to build dir
     let appDirGen = outputDir </> appDirRel -- relative to here
     coreLift $ mkdirAll appDirGen
@@ -106,23 +106,18 @@ compileExpr mkexec c tmpDir outputDir tm outfile = do
     Right () <- coreLift (writeFile outMlAbs code)
         | Left err => throw (FileErr outMlAbs err)
 
-    ok <- the (Core Int) $ if mkexec
-        then do
+    ok <- the (Core Int) $ do
             ocamlFind <- coreLift findOcamlFind
             coreLift . system $ ocamlFind ++ " ocamlopt -package zarith -linkpkg -w -20-26-8 " ++ outMlAbs ++ " -o " ++ outBinAbs
-        else
-            pure 0
     
     if ok == 0
-        then if mkexec
-            then pure (Just outBinAbs)
-            else pure (Just outMlAbs)
+        then pure (Just outBinAbs)
         else pure Nothing
 
 ||| OCaml implementation of the `executeExpr` interface.
 executeExpr : Ref Ctxt Defs -> (tmpDir : String) -> ClosedTerm -> Core ()
 executeExpr c tmpDir tm = do
-    Just bin <- compileExpr True c tmpDir tmpDir tm "tmpocaml"
+    Just bin <- compileExpr c tmpDir tmpDir tm "tmpocaml"
         | Nothing => throw (InternalError "compileExpr returned Nothing")
     coreLift $ system bin
     pure ()
@@ -130,7 +125,7 @@ executeExpr c tmpDir tm = do
 
 export
 codegenOcaml : Codegen
-codegenOcaml = MkCG (compileExpr True) executeExpr
+codegenOcaml = MkCG compileExpr executeExpr
 
 main : IO ()
 main = mainWithCodegens [("ocaml", codegenOcaml)]
