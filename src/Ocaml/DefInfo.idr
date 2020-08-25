@@ -1,3 +1,11 @@
+||| Extracting type information from function and constructor definitions.
+|||
+||| By matching all arrows in a function or constructor type all "primitive"
+||| types are extracted as best as possible.
+|||
+||| Because type information is limited, this does not work well across type
+||| aliases or functions, it's only a best effort.
+
 module Ocaml.DefInfo
 
 import Compiler.Common
@@ -9,6 +17,11 @@ import Data.NameMap
 import Data.Vect
 import Data.List
 
+||| Abstract types that are used to specialise items that
+||| use "primitive" types.
+|||
+||| Any non-primitive type *or* type that can't be extracted
+||| is represented as `SOpaque`
 public export
 data SType = SErased
            | SInt
@@ -121,7 +134,7 @@ extractTypes numArgs term =
         restType = fromTerm (snd res.restType)
     in MkExtRes argTypes restType res.leftOverArgs
 
-
+||| Replace all types at `erase` indices with `SErased`
 eraseTypes : (idx : Nat) -> (erase : List Nat) -> List SType -> List SType
 eraseTypes n (i::is) (a::as) =
     if n == i
@@ -129,7 +142,15 @@ eraseTypes n (i::is) (a::as) =
         else a :: eraseTypes (S n) (i::is) as
 eraseTypes _ _ args = args
 
+||| Remove all elements at `idxs` indices
+removeIdxs : (idx : Nat) -> (idxs : List Nat) -> List a -> List a
+removeIdxs n (i::is) (a::as) =
+    if n == i
+        then removeIdxs (S n) is as
+        else a :: removeIdxs (S n) (i::is) as
+removeIdxs _ _ args = args
 
+||| Type information about a function or constructor
 public export
 record DefInfo where
     constructor MkDefInfo
@@ -155,6 +176,9 @@ buildDefInfoMap xs = inner empty xs
 
             case def of
                 MkNmFun args _ => 
+                    -- For functions replace types of erased arguments with SErased
+                    -- as not all function invocations will always go through `App`s
+                    -- that have all type information. 
                     let res = extractTypes (length args) glob.type
                         restTy = res.restType
                         argTys = res.argTypes ++ replicate res.leftOverArgs SOpaque
@@ -162,10 +186,15 @@ buildDefInfoMap xs = inner empty xs
                         info = MkDefInfo argTys' restTy
                     in inner {c = c} (insert name info acc) defs
                 MkNmCon tag arity nt => 
+                    -- For constructors all erased arguments need to be removed
+                    -- from the arg-types list. Constructor expressions will only
+                    -- supply non-erased arguments and pattern matching will only
+                    -- extract non-erased arguments, so removing them entirely
+                    -- is the way to go here.
                     let res = extractTypes arity glob.type
                         restTy = res.restType
                         argTys = res.argTypes ++ replicate res.leftOverArgs SOpaque
-                        argTys' = eraseTypes 0 glob.eraseArgs argTys
+                        argTys' = removeIdxs 0 glob.eraseArgs argTys
                         info = MkDefInfo argTys' restTy
                     in inner {c = c} (insert name info acc) defs
 

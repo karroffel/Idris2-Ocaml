@@ -300,8 +300,7 @@ mutual
                 let src = "| (" ++ show tag' ++ ", fields') -> "
                 case lookup name di of
                     Just info => do
-                        let fieldTypes = filter (/= SErased) info.argTypes
-                            ty = showSep " * " (map ocamlTypeName fieldTypes)
+                        let ty = showSep " * " (map ocamlTypeName info.argTypes)
                             ty' = case numNames of
                                 0 => "unit"
                                 1 => ty
@@ -309,7 +308,7 @@ mutual
                             pat = showSep ", " (map mlName names)
                             pat' = if numNames == 1 then pat else "(" ++ pat ++ ")"
                             binds = "let " ++ pat' ++ " : " ++ ty' ++ " = Obj.magic fields' in "
-                            funArgs' = fromList (names `zip` fieldTypes)
+                            funArgs' = fromList (names `zip` info.argTypes)
                             
                         expr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque expr
                         pure (src ++ binds ++ expr'.source)

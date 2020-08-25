@@ -13,6 +13,8 @@ An OCaml backend for [Idris2](https://github.com/idris-lang/Idris2).
 
 The following command will build the backend and install the support files in the Idris2 "home" directory. Check the [`Makefile`](Makefile) for the location.
 
+(**NOTE**: I am using VScode and the IDE mode process spawned often causes my RAM to fill and use up swap, so the build command kills all open Idris processes before building)
+
 ```bash
 make all
 ```
