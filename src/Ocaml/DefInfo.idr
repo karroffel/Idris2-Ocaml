@@ -161,6 +161,7 @@ public export
 DefInfos : Type
 DefInfos = NameMap DefInfo
 
+||| Extract type information of all the provided defs
 export
 buildDefInfoMap : {auto c : Context} -> List (Name, FC, NamedDef) -> Core DefInfos
 buildDefInfoMap xs = inner empty xs

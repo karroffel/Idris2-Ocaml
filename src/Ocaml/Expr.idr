@@ -1,3 +1,9 @@
+||| Compiling of expressions
+|||
+||| Expressions track their type along with the generated OCaml code.
+||| Because OCaml is a statically typed language and some primitive types in
+||| Idris map nicely to OCaml it makes sense to keep this information around to
+||| only insert the casts that are necessary.
 module Ocaml.Expr
 
 import Compiler.Common
@@ -56,7 +62,13 @@ mlName (WithBlock x y) = "with__" ++ mlIdent x ++ "_" ++ show y
 mlName (Resolved x) = "fn__" ++ show x
 
 
-
+||| Compiled OCaml code for an expression, including the `SType`.
+|||
+||| The generated OCaml code should always have same type as the `type` field.
+||| This allows casts to only be inserted when needed.
+|||
+||| The tracking of types is a small abstract interpretation, only primitive
+||| types are supported and everything else is `SOpaque`.
 public export
 record MLExpr where
     constructor MkMLExpr
@@ -71,7 +83,15 @@ public export
 erased : MLExpr
 erased = MkMLExpr "()" SErased
 
-||| The name of the OCaml function that will cast an expression to a type
+||| The name of the OCaml support function that serve as a hint to the OCaml
+||| type checker.
+|||
+||| This is needed when function values (which are represented as `SOpaque`) are
+||| called. The type of the arguments are found automatically when using
+||| `Obj.magic`, but the return type can't always be inferred.
+|||
+||| These hint functions act like the Idris function `the type` and only
+||| provides a hint.
 hintFn : SType -> String
 hintFn SErased = "hint_erased"
 hintFn SInt = "hint_int"
@@ -86,6 +106,7 @@ hintFn SDouble = "hint_double"
 hintFn SWorld = "hint_world"
 hintFn SOpaque = "hint_opaque"
 
+||| The name of OCaml type used to represent values of `SType`s.
 export
 ocamlTypeName : SType -> String
 ocamlTypeName SErased = "unit"
@@ -102,6 +123,9 @@ ocamlTypeName SWorld = "unit"
 ocamlTypeName SOpaque = "idr2_opaque"
 
 ||| The name of the OCaml function that will cast an expression to a type
+|||
+||| These casts are less "conversion" casts and rather "reinterpret the data"
+||| type casts. The values are unchanged and the casts only apply to the types.
 castFn : SType -> String
 castFn SErased = "as_erased"
 castFn SInt = "as_int"
@@ -154,7 +178,7 @@ mlString s = "\"" ++ (concatMap okchar (unpack s)) ++ "\""
                             other => "\\u{" ++ asHex (cast {to=Int} c) ++ "}"
                    
 
-
+||| Generate OCaml code for constant values
 mlPrimVal : Constant -> Core MLExpr
 mlPrimVal (I x) = pure $ MkMLExpr (show x) SInt
 mlPrimVal (BI x) = pure $ MkMLExpr (fnCall "Z.of_string" [mlString (show x)]) SInteger
@@ -168,6 +192,11 @@ mlPrimVal (Db x) = pure $ MkMLExpr (show x) SDouble
 mlPrimVal WorldVal = pure $ MkMLExpr "()" SWorld
 mlPrimVal val = throw . InternalError $ "Unsupported primitive value: " ++ show val
 
+||| Generate patterns for constant values
+|||
+||| Patterns can differ from "value" expressions for some types.
+||| The type is also tracked so that the expression to be matched on can be
+||| casted accordingly.
 mlPrimValPattern : Constant -> Core (String, SType)
 mlPrimValPattern (I x) = pure (show x, SInt)
 mlPrimValPattern (BI x) = pure (mlString (show x), SInteger)
@@ -183,6 +212,10 @@ mlPrimValPattern val = throw . InternalError $ "Unsupported primitive in pattern
 
 
 mutual
+    ||| Generate code for an expression and cast it if needed
+    |||
+    ||| If a cast is not needed because the types already match then this
+    ||| function behaves the same as `mlExpr`
     export
     castedExpr : {auto di : DefInfos} ->
                  {auto funArgs : NameMap SType } ->
@@ -195,6 +228,7 @@ mutual
             Nothing => pure expr'
             Just fn => pure $ MkMLExpr (fnCall fn [expr'.source]) ty
 
+    ||| Generate code for an expression
     export
     mlExpr : {auto di : DefInfos} ->
             {auto funArgs : NameMap SType } ->
@@ -209,6 +243,7 @@ mutual
         in pure $ MkMLExpr source type
     mlExpr (NmLam fc x expr) = do
         expr' <- castedExpr SOpaque expr
+        -- functions values are always `SOpaque -> SOpaque`, so a cast is needed
         let source = "(as_opaque (fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> "
                 ++ expr'.source
                 ++ "))"
@@ -216,16 +251,19 @@ mutual
         pure $ MkMLExpr source type
     mlExpr (NmLet fc x rhs expr) = do
         rhs' <- mlExpr rhs
+        -- insert the newly bound name into the type environment for `expr`
         let funArgs' = insert x rhs'.type funArgs
         expr' <- mlExpr {funArgs = funArgs'} expr
         let source = "(let " ++ mlName x ++ " = " ++ rhs'.source ++ " in " ++ expr'.source ++ ")"
         let type = expr'.type
         pure $ MkMLExpr source type
     mlExpr (NmApp fc (NmRef _ name) args) = do
+        -- function call with all arguments supplied
         args' <- traverse mlExpr args
         case lookup name di of
             Just tyInfo => do
                 args <- traverse (uncurry castedExpr) (tyInfo.argTypes `zip` args)
+                -- functions without any arguments still need a `()`
                 let args' = if isNil args then [erased] else args
                 let call = fnCall (mlName name) (map source args')
                 pure $ MkMLExpr call tyInfo.restType
@@ -233,8 +271,10 @@ mutual
             Nothing => throw $ InternalError ("Unsupported function " ++ show name)
 
     mlExpr (NmApp fc base args) = do
+        -- function call for a function value, might not have all argument supplied
         base' <- mlExpr base
         args' <- traverse mlExpr args
+        -- can't call a function without arguments, needs at least `()`
         let args'' = if isNil args then [erased] else args'
 
         let src = fnCall "hint_opaque" [fnCall "as_fun" (base'.source :: map source args'')]
@@ -245,6 +285,7 @@ mutual
         let tag' = fromMaybe 0 tag
         case lookup name di of
             Just tyInfo => do
+                -- if type information is available then generate "optimal" code
                 args' <- traverse (uncurry castedExpr) (tyInfo.argTypes `zip` args)
                 let argsArray = "(" ++ showSep ", " (map source args') ++ ")"
                     src = "(as_opaque (" ++ show tag' ++ ", as_opaque " ++ argsArray ++ "))"
@@ -269,7 +310,7 @@ mutual
                 coreLift $ putStrLn $ "Unimplemented ExtPrim!"
                 coreLift $ putStrLn $ "ExtPrim: " ++ show name
                 coreLift $ putStrLn $ "   args: " ++ show args
-                pure empty
+                pure erased
 
     mlExpr (NmForce fc expr) = do
         expr' <- mlExpr expr
@@ -280,6 +321,10 @@ mutual
         let src = fnCall "as_opaque" [fnCall "lazy" [expr'.source]]
         pure $ MkMLExpr src SOpaque
     mlExpr (NmConCase fc expr alts def) = do
+        -- TODO if all alts have the same type then the whole expression
+        -- can have the same type too.
+        --
+        -- Right now all `case` expressions are `SOpaque`.
         expr' <- mlExpr expr
         alts' <- traverse alt alts
         def' <- case def of
@@ -329,6 +374,10 @@ mutual
                         pure (src ++ binds ++ expr'.source)
 
     mlExpr (NmConstCase fc expr alts def) = do
+        -- TODO if all alts have the same type then the whole expression
+        -- can have the same type too.
+        --
+        -- Right now all `case` expressions are `SOpaque`.
         alts' <- traverse alt alts
         def' <- case def of
             Just e => do
@@ -339,10 +388,13 @@ mutual
         let arms = map snd alts'
             constTy = map fst alts'
 
+        -- Try to find the type of the expression by looking at the patterns
         expr' <- case constTy of
                     [] => castedExpr SOpaque expr
                     (t::_) => castedExpr t expr
         
+        -- Integers are matched as Strings for now, so add a conversion
+        -- TODO make this a bit nicer
         let matchExpr = if expr'.type == SInteger
                             then fnCall "Z.to_string" [expr'.source]
                             else expr'.source
@@ -367,6 +419,7 @@ mutual
             type = SOpaque
         in pure $ MkMLExpr source type
 
+    ||| Generate code for external functions
     exPrim : {auto di : DefInfos} ->
              {auto funArgs : NameMap SType } ->
              Name ->

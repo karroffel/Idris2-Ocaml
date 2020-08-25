@@ -1,3 +1,8 @@
+||| Foreign function definitions
+|||
+||| These are hardcoded and matched against the name for now.
+||| If this backend ever gets included in the compiler then all those
+||| mappings can be added to the functions in `libs/` instead.
 module Ocaml.Foreign
 
 import Compiler.Common

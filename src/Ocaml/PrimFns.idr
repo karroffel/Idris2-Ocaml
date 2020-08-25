@@ -1,3 +1,4 @@
+||| Code generation for primitive functions
 module Ocaml.PrimFns
 
 import Compiler.Common
@@ -10,6 +11,11 @@ import Data.Vect
 import Ocaml.DefInfo
 import Ocaml.Utils
 
+||| Delayed code generation of a primitive function.
+|||
+||| Because the code for compiling expressions is in an unaccessible module
+||| the expected types are reported and a printing function `printer` is
+||| provided which works on `String`s instead.
 public export
 record PrimFnRes (arity : Nat) where
     constructor MkPrimFnRes

@@ -29,6 +29,7 @@ findOcamlFind : IO String
 findOcamlFind = pure "ocamlfind" -- TODO
 
 
+||| Generate OCaml code for a "definition" (function, constructor, foreign func, etc)
 mlDef : {auto di : DefInfos} ->
         Name ->
         NamedDef ->
@@ -62,6 +63,7 @@ mlDef name (MkNmForeign ccs argTys retTy) = do
     pure $ header ++ foreignFun name argTys retTy ++ " " ++ showSep " " callArgs ++ "\n\n"
 mlDef name (MkNmError msg) = pure ""
 
+||| Generate OCaml code for the main expression
 mainFunc : {auto di : DefInfos} -> NamedCExp -> Core String
 mainFunc expr = do
     code <- mlExpr {funArgs = empty} expr
