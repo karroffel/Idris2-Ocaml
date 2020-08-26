@@ -25,6 +25,7 @@ import System.Info
 import Ocaml.Expr
 import Ocaml.DefInfo
 import Ocaml.Foreign
+import Ocaml.Utils
 
 findOcamlFind : IO String
 findOcamlFind = pure "ocamlfind" -- TODO
@@ -103,18 +104,23 @@ compileExpr c tmpDir outputDir tm outfile = do
     
     support <- readDataFile "ocaml/support.ml"
 
-    defsCode <- traverse (\(name, _, def) => do
-                            coreLift $ putStrLn ("Compiling " ++ show name)
-                            mlDef name def) ndefs
-
-    mainCode <- mainFunc ctm
-    let generatedCode = concat defsCode ++ mainCode
-        code = support ++ generatedCode
-
-    Right () <- coreLift (writeFile outMlAbs code)
+    Right mlFile <- coreLift $ openFile outMlAbs WriteTruncate
         | Left err => throw (FileErr outMlAbs err)
+    
+    let append = \strData => Core.Core.do
+                    Right () <- coreLift $ fPutStr mlFile strData
+                        | Left err => throw (FileErr outMlAbs err)
+                    coreLift $ fflush mlFile
 
+    append support
 
+    for_ ndefs $ \(name, _, def) => do
+        s <- mlDef name def
+        append s
+    
+    append !(mainFunc ctm)
+
+    coreLift $ closeFile mlFile
 
     let copy = \fn => Core.Core.do
         src <- readDataFile ("ocaml" </> fn)
@@ -137,7 +143,7 @@ compileExpr c tmpDir outputDir tm outfile = do
                         "&& " ++ ocamlFind ++ " opt -I +threads -c OcamlRts.ml",
                         "&& " ++ ocamlFind ++ " opt -thread -package zarith -linkpkg -nodynlink"
                             ++ " ocaml_rts.o OcamlRts.cmx"
-                            ++ " libidris2_support.a -w -20-26-8 "
+                            ++ " libidris2_support.a -w -20-24-26-8 "
                             ++ outMlAbs ++ " -o " ++ outBinAbs
                     ]
             coreLift . putStrLn $ "Running command: " ++ cmd

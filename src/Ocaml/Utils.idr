@@ -15,6 +15,23 @@ traverse f (x::xs) = do
     xs' <- traverse f xs
     pure $ x' :: xs'
 
+
+export
+for : List a -> (a -> Core b) -> Core (List b)
+for [] f = pure []
+for (x::xs) f = do
+    x' <- f x
+    rest <- for xs f
+    pure (x' :: rest)
+
+export
+for_ : List a -> (a -> Core ()) -> Core ()
+for_ [] f = pure ()
+for_ (x::xs) f = do
+    () <- f x
+    for_ xs f
+
+
 export
 binOp : (op : String) -> (a, b : String) -> String
 binOp op a b = "(" ++ a ++ " " ++ op ++ " " ++ b ++ ")"
