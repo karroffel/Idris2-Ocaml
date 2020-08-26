@@ -238,9 +238,27 @@ mlPrimFn (Neg IntegerType) [a] = pure $ MkPrimFnRes [SInteger] SInteger $ \[a] =
 mlPrimFn (Neg DoubleType) [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "-." [a]
 mlPrimFn (ShiftL ty) _ = shiftLFn ty
 mlPrimFn (ShiftR ty) _ = shiftLFn ty
-mlPrimFn (BAnd ty) args = throw $ InternalError "unimplemented bitwise-and"
-mlPrimFn (BOr ty) args = throw $ InternalError "unimplemented bitwise-or"
-mlPrimFn (BXOr ty) args = throw $ InternalError "unimplemented bitwise-xor"
+mlPrimFn (BAnd IntType) _ = binaryPrimFn SInt $ \[a, b] => fnCall "Int.logand" [a, b]
+mlPrimFn (BAnd IntegerType) _ = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.logand" [a, b]
+mlPrimFn (BAnd Bits8Type) _ = binaryPrimFn SBits8 $ \[a, b] => bits8Bound (fnCall "Int.logand" [a, b])
+mlPrimFn (BAnd Bits16Type) _ = binaryPrimFn SBits16 $ \[a, b] => bits16Bound (fnCall "Int.logand" [a, b])
+mlPrimFn (BAnd Bits32Type) _ = binaryPrimFn SBits32 $ \[a, b] => bits32Bound (fnCall "Int.logand" [a, b])
+mlPrimFn (BAnd Bits64Type) _ = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.logand" [a, b]
+mlPrimFn (BAnd ty) args = throw $ InternalError ("unimplemented bitwise-and for type " ++ show ty)
+mlPrimFn (BOr IntType) _ = binaryPrimFn SInt $ \[a, b] => fnCall "Int.logor" [a, b]
+mlPrimFn (BOr IntegerType) _ = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.logor" [a, b]
+mlPrimFn (BOr Bits8Type) _ = binaryPrimFn SBits8 $ \[a, b] => bits8Bound (fnCall "Int.logor" [a, b])
+mlPrimFn (BOr Bits16Type) _ = binaryPrimFn SBits16 $ \[a, b] => bits16Bound (fnCall "Int.logor" [a, b])
+mlPrimFn (BOr Bits32Type) _ = binaryPrimFn SBits32 $ \[a, b] => bits32Bound (fnCall "Int.logor" [a, b])
+mlPrimFn (BOr Bits64Type) _ = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.logor" [a, b]
+mlPrimFn (BOr ty) args = throw $ InternalError ("unimplemented bitwise-or for type " ++ show ty)
+mlPrimFn (BXOr IntType) _ = binaryPrimFn SInt $ \[a, b] => fnCall "Int.logxor" [a, b]
+mlPrimFn (BXOr IntegerType) _ = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.logxor" [a, b]
+mlPrimFn (BXOr Bits8Type) _ = binaryPrimFn SBits8 $ \[a, b] => bits8Bound (fnCall "Int.logxor" [a, b])
+mlPrimFn (BXOr Bits16Type) _ = binaryPrimFn SBits16 $ \[a, b] => bits16Bound (fnCall "Int.logxor" [a, b])
+mlPrimFn (BXOr Bits32Type) _ = binaryPrimFn SBits32 $ \[a, b] => bits32Bound (fnCall "Int.logxor" [a, b])
+mlPrimFn (BXOr Bits64Type) _ = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.logxor" [a, b]
+mlPrimFn (BXOr ty) args = throw $ InternalError ("unimplemented bitwise-xor for type " ++ show ty)
 mlPrimFn (LT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<" a b
 mlPrimFn (LTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<=" a b
 mlPrimFn (EQ ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "==" a b
@@ -266,7 +284,7 @@ mlPrimFn DoubleSqrt _ = pure $ doubleFn "Float.sqrt"
 mlPrimFn DoubleFloor _ = pure $ doubleFn "Float.floor"
 mlPrimFn DoubleCeiling _ = pure $ doubleFn "Float.ceil"
 mlPrimFn BelieveMe [_, _, x] = pure $ MkPrimFnRes [SErased, SErased, SOpaque] SOpaque $ \[_, _, x] => x
-mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SErased] SOpaque $ \[_, _] => fnCall "raise" [fnCall "Idris2_Exception" [show msg]]
+mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SErased] SOpaque $ \[_, _] => fnCall "raise" [fnCall "Idris2_Exception" [show $ show msg]]
 mlPrimFn (Cast ty IntType) _ = castToInt ty
 mlPrimFn (Cast ty IntegerType) _ = castToInteger ty
 mlPrimFn (Cast ty Bits8Type) _ = castToBits8 ty

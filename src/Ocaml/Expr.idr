@@ -16,6 +16,8 @@ import Data.Maybe
 import Data.NameMap
 import Data.Vect
 
+import Debug.Trace
+
 import Utils.Hex
 
 import Ocaml.DefInfo
@@ -126,6 +128,7 @@ ocamlTypeName SOpaque = "idr2_opaque"
 |||
 ||| These casts are less "conversion" casts and rather "reinterpret the data"
 ||| type casts. The values are unchanged and the casts only apply to the types.
+export
 castFn : SType -> String
 castFn SErased = "as_erased"
 castFn SInt = "as_int"
@@ -228,20 +231,42 @@ mutual
             Nothing => pure expr'
             Just fn => pure $ MkMLExpr (fnCall fn [expr'.source]) ty
 
-    ||| Generate code for an expression
     export
     mlExpr : {auto di : DefInfos} ->
+        {auto funArgs : NameMap SType } ->
+        NamedCExp -> Core MLExpr
+    mlExpr e@(NmLocal fc _) = trace ("Local " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmRef fc _) = trace ("Ref " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmLam fc _ _) = trace ("Lam " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmLet fc _ _ _) = trace ("Let " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmApp fc _ _) = trace ("App " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmCon fc _ _ _) = trace ("Con " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmOp fc _ _) = trace ("Op " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmExtPrim fc _ _) = trace ("ExtPrim " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmForce fc _) = trace ("Force " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmDelay fc _) = trace ("Delay " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmConCase fc _ _ _) = trace ("ConCase " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmConstCase fc _ _ _) = trace ("ConstCase " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmPrimVal fc _) = trace ("PrimVal " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmErased fc) = trace ("Erased " ++ show fc) $ mlExpr' e
+    mlExpr e@(NmCrash fc _) = trace ("Crash " ++ show fc) $ mlExpr' e
+
+
+
+    ||| Generate code for an expression
+    export
+    mlExpr' : {auto di : DefInfos} ->
             {auto funArgs : NameMap SType } ->
             NamedCExp -> Core MLExpr
-    mlExpr (NmLocal fc x) = do
+    mlExpr' (NmLocal fc x) = do
         let ty = fromMaybe SOpaque (lookup x funArgs)
         let source = mlName x
         pure $ MkMLExpr source ty
-    mlExpr (NmRef fc x) =
+    mlExpr' (NmRef fc x) =
         let source = fnCall "as_opaque" [mlName x]
             type = SOpaque
         in pure $ MkMLExpr source type
-    mlExpr (NmLam fc x expr) = do
+    mlExpr' (NmLam fc x expr) = do
         expr' <- castedExpr SOpaque expr
         -- functions values are always `SOpaque -> SOpaque`, so a cast is needed
         let source = "(as_opaque (fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> "
@@ -249,7 +274,7 @@ mutual
                 ++ "))"
             type = SOpaque
         pure $ MkMLExpr source type
-    mlExpr (NmLet fc x rhs expr) = do
+    mlExpr' (NmLet fc x rhs expr) = do
         rhs' <- mlExpr rhs
         -- insert the newly bound name into the type environment for `expr`
         let funArgs' = insert x rhs'.type funArgs
@@ -257,7 +282,7 @@ mutual
         let source = "(let " ++ mlName x ++ " = " ++ rhs'.source ++ " in " ++ expr'.source ++ ")"
         let type = expr'.type
         pure $ MkMLExpr source type
-    mlExpr (NmApp fc (NmRef _ name) args) = do
+    mlExpr' (NmApp fc (NmRef _ name) args) = do
         -- function call with all arguments supplied
         args' <- traverse mlExpr args
         case lookup name di of
@@ -270,7 +295,7 @@ mutual
                 
             Nothing => throw $ InternalError ("Unsupported function " ++ show name)
 
-    mlExpr (NmApp fc base args) = do
+    mlExpr' (NmApp fc base args) = do
         -- function call for a function value, might not have all argument supplied
         base' <- mlExpr base
         args' <- traverse mlExpr args
@@ -281,7 +306,7 @@ mutual
             type = SOpaque
         pure $ MkMLExpr src type
 
-    mlExpr (NmCon fc name tag args) = do
+    mlExpr' (NmCon fc name tag args) = do
         let tag' = fromMaybe 0 tag
         case lookup name di of
             Just tyInfo => do
@@ -296,13 +321,13 @@ mutual
                     src = "(as_opaque (" ++ show tag' ++ ", as_opaque " ++ argsArray ++ "))"
                 pure $ MkMLExpr src SOpaque
 
-    mlExpr (NmOp fc fn args) = do
+    mlExpr' (NmOp fc fn args) = do
         res <- mlPrimFn fn args
         args' <- traverse (uncurry castedExpr) $ res.argTypes `zip` args
         let src = res.printer (map source args')
         pure $ MkMLExpr src res.retType
 
-    mlExpr (NmExtPrim fc name args) =
+    mlExpr' (NmExtPrim fc name args) =
         case !(exPrim name args) of
             Just exp => pure exp
             
@@ -312,15 +337,15 @@ mutual
                 coreLift $ putStrLn $ "   args: " ++ show args
                 pure erased
 
-    mlExpr (NmForce fc expr) = do
+    mlExpr' (NmForce fc expr) = do
         expr' <- mlExpr expr
         let src = fnCall "Lazy.force" [fnCall "as_lazy" [expr'.source]]
         pure $ MkMLExpr src SOpaque
-    mlExpr (NmDelay fc expr) = do
+    mlExpr' (NmDelay fc expr) = do
         expr' <- mlExpr expr
         let src = fnCall "as_opaque" [fnCall "lazy" [expr'.source]]
         pure $ MkMLExpr src SOpaque
-    mlExpr (NmConCase fc expr alts def) = do
+    mlExpr' (NmConCase fc expr alts def) = do
         -- TODO if all alts have the same type then the whole expression
         -- can have the same type too.
         --
@@ -373,7 +398,7 @@ mutual
                         expr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque expr
                         pure (src ++ binds ++ expr'.source)
 
-    mlExpr (NmConstCase fc expr alts def) = do
+    mlExpr' (NmConstCase fc expr alts def) = do
         -- TODO if all alts have the same type then the whole expression
         -- can have the same type too.
         --
@@ -412,10 +437,10 @@ mutual
                 let src = "| " ++ pat ++ " -> " ++ expr'.source
                 pure $ (ty, src)
 
-    mlExpr (NmPrimVal fc val) = mlPrimVal val
-    mlExpr (NmErased fc) = pure erased
-    mlExpr (NmCrash fc x) = 
-        let source = fnCall "raise" [fnCall "Idris2_Exception" [show x]]
+    mlExpr' (NmPrimVal fc val) = mlPrimVal val
+    mlExpr' (NmErased fc) = pure erased
+    mlExpr' (NmCrash fc x) = 
+        let source = fnCall "raise" [fnCall "Idris2_Exception" [mlString $ show x]]
             type = SOpaque
         in pure $ MkMLExpr source type
 
@@ -427,6 +452,44 @@ mutual
              Core (Maybe MLExpr)
     exPrim name args =
         case (show name, args) of
+            ("System.Info.prim__codegen", []) => pure . Just $ MkMLExpr (mlString "ocaml") SString
             ("System.Info.prim__os", []) => do
-                pure . Just $ MkMLExpr "(idr2_sys_os ())" SString
+                pure . Just $ MkMLExpr "(OcamlRts.System.os_name (Obj.magic ()))" SString
+            
+            -- IORef
+            ("Data.IORef.prim__newIORef", [_, val, world]) => do
+                val' <- castedExpr SOpaque val
+                let src = "(as_opaque (ref " ++ val'.source ++ "))"
+                pure . Just $ MkMLExpr src SOpaque
+            ("Data.IORef.prim__writeIORef", [_, ref, val, world]) => do
+                ref' <- castedExpr SOpaque ref
+                val' <- castedExpr SOpaque val
+                let src = "((as_ref (" ++ ref'.source ++ ")) := " ++ val'.source ++ "; as_opaque ())"
+                pure . Just $ MkMLExpr src SOpaque
+            ("Data.IORef.prim__readIORef", [_, ref, world]) => do
+                ref' <- castedExpr SOpaque ref
+                let src = "(as_opaque (!(as_ref " ++ ref'.source ++ ")))"
+                pure . Just $ MkMLExpr src SOpaque
+
+            -- IOArray
+            ("Data.IOArray.Prims.prim__newArray", [_, len, val, world]) => do
+                len' <- castedExpr SInt len
+                val' <- castedExpr SOpaque val
+                let src = "(as_opaque (Array.make " ++ len'.source ++ " " ++ val'.source ++ "))"
+                pure . Just $ MkMLExpr src SOpaque
+            ("Data.IOArray.Prims.prim__arraySet", [_, arr, idx, val, world]) => do
+                arr' <- castedExpr SOpaque arr
+                idx' <- castedExpr SInt idx
+                val' <- castedExpr SOpaque val
+                let src = "(Array.set (as_array " ++ arr'.source ++ ") " ++ idx'.source ++ " " ++ val'.source ++ "; as_opaque ())"
+                pure . Just $ MkMLExpr src SOpaque
+            ("Data.IOArray.Prims.prim__arrayGet", [_, arr, idx, world]) => do
+                arr' <- castedExpr SOpaque arr
+                idx' <- castedExpr SInt idx
+                let src = "(as_opaque (Array.get (as_array " ++ arr'.source ++ ") " ++ idx'.source ++ "))"
+                pure . Just $ MkMLExpr src SOpaque
+
+            ("Prelude.Uninhabited.void", [_, _]) => do
+                pure . Just $ MkMLExpr "(as_opaque ())" SOpaque
+            
             _ => pure Nothing

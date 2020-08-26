@@ -11,6 +11,7 @@ import Core.Directory
 import Utils.Path
 
 import Data.List
+import Data.Strings
 import Data.NameMap
 import Data.Maybe
 import Data.Vect
@@ -58,9 +59,14 @@ mlDef name (MkNmForeign ccs argTys retTy) = do
         argDecls = showSep " " $ map (\(name, ty) => "(" ++ name ++ " : " ++ ocamlTypeName ty ++ ")") args
         args' = if isNil args then "()" else argDecls
     let header = "and " ++ mlName name ++ " " ++ args' ++ " : " ++ ocamlTypeName retTy' ++ " = "
-        callArgs = if isNil argTys' then ["()"] else argNames
+        callArgs = filter (\(_, ty) => ty /= SWorld) args
+    
+        callArgs' = if isNil callArgs then ["(Obj.magic ())"] else map (\(n, _) => "(Obj.magic (" ++ n ++ "))") callArgs
+        
+        body = "(Obj.magic (" ++ foreignFun name ccs argTys retTy ++ " " ++ showSep " " callArgs' ++ "))"
 
-    pure $ header ++ foreignFun name argTys retTy ++ " " ++ showSep " " callArgs ++ "\n\n"
+    pure $ header ++ body ++ "\n\n"
+    
 mlDef name (MkNmError msg) = pure ""
 
 ||| Generate OCaml code for the main expression
@@ -97,7 +103,9 @@ compileExpr c tmpDir outputDir tm outfile = do
     
     support <- readDataFile "ocaml/support.ml"
 
-    defsCode <- traverse (\(name, _, def) => mlDef name def) ndefs
+    defsCode <- traverse (\(name, _, def) => do
+                            coreLift $ putStrLn ("Compiling " ++ show name)
+                            mlDef name def) ndefs
 
     mainCode <- mainFunc ctm
     let generatedCode = concat defsCode ++ mainCode
@@ -106,9 +114,34 @@ compileExpr c tmpDir outputDir tm outfile = do
     Right () <- coreLift (writeFile outMlAbs code)
         | Left err => throw (FileErr outMlAbs err)
 
+
+
+    let copy = \fn => Core.Core.do
+        src <- readDataFile ("ocaml" </> fn)
+        coreLift $ writeFile (appDirGen </> fn) src
+    
+    -- TMP HACK
+    -- .a and .h files
+    coreLift $ system $ unwords
+        ["cp", "~/.idris2/idris2-0.2.1/lib/*", appDirGen]
+
+    coreLift $ system $ "cp ~/.idris2/idris2-0.2.1/support/ocaml/ocaml_rts.o " ++ appDirGen
+    coreLift $ system $ "cp ~/.idris2/idris2-0.2.1/support/ocaml/OcamlRts.ml " ++ appDirGen
+
     ok <- the (Core Int) $ do
             ocamlFind <- coreLift findOcamlFind
-            coreLift . system $ ocamlFind ++ " ocamlopt -package zarith -linkpkg -w -20-26-8 " ++ outMlAbs ++ " -o " ++ outBinAbs
+            let cmd = unwords [
+                        "cd " ++ appDirGen,
+                        "&& " ++ ocamlFind ++ " opt -I +threads -i OcamlRts.ml > OcamlRts.mli",
+                        "&& " ++ ocamlFind ++ " opt -I +threads -c OcamlRts.mli",
+                        "&& " ++ ocamlFind ++ " opt -I +threads -c OcamlRts.ml",
+                        "&& " ++ ocamlFind ++ " opt -thread -package zarith -linkpkg -nodynlink"
+                            ++ " ocaml_rts.o OcamlRts.cmx"
+                            ++ " libidris2_support.a -w -20-26-8 "
+                            ++ outMlAbs ++ " -o " ++ outBinAbs
+                    ]
+            coreLift . putStrLn $ "Running command: " ++ cmd
+            coreLift . system $ cmd
     
     if ok == 0
         then pure (Just outBinAbs)

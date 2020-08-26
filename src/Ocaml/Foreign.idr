@@ -13,30 +13,37 @@ import Core.Context
 import Data.NameMap
 import Data.Vect
 import Data.List
+import Data.List1
+import Data.Strings
 
 import Ocaml.DefInfo
 
 implNames : List (String, String)
 implNames = [
-    ("Prelude.IO.prim__putStr", "idr2_print_string"),
-    ("Prelude.IO.prim__getStr", "idr2_get_string"),
-    ("System.prim__system", "idr2_system")
-    {-
-    ("Prelude.IO.prim__getString", "as_string"), -- Ptr -> String
-    ("PrimIO.prim__nullAnyPtr", "idr2_is_null"), -- [] -> Ptr
-    ("System.File.prim__open", "idr2_sys_file_open"), -- [String, String, %World] -> IORes Ptr
-    ("System.File.prim__close", "idr2_sys_file_close"), -- [Ptr, %World] -> IORes Unit
-    ("System.File.prim__readLine", "idr2_sys_file_read_line") -- [Ptr, %World] -> IORes Ptr
-    
-    -- System.File.prim__fileErrno : [%World] -> IORes Int
-    -- System.File.prim__open : [String, String, %World] -> IORes Ptr
-    -- System.File.prim__readLine : [Ptr, %World] -> IORes Ptr
-
-    -}
+    ("Data.Strings.fastConcat", "string_fast_concat")
 ]
 
+ccLibFun : List String -> Maybe String
+ccLibFun [] = Nothing
+ccLibFun (cc :: ccs) =
+  if substr 0 3 cc == "ML:"
+    then Just (substr 3 (length cc) cc)
+    else if substr 0 2 cc == "C:"
+        then case split (== ',') (substr 2 (length cc) cc) of
+          [fn, libn] => Just ("OcamlRts.C.Lib_" ++ rmSpaces libn ++ "." ++ fn)
+          _ => ccLibFun ccs  -- something strange -> skip
+        else ccLibFun ccs  -- search further
+  where
+    rmSpaces : String -> String
+    rmSpaces = pack . filter (/= ' ') . unpack
+
+
+
 export
-foreignFun : Name -> List CFType -> CFType -> String
-foreignFun name args ret = case lookup (show name) implNames of
+foreignFun : Name -> List String -> List CFType -> CFType -> String
+foreignFun name ccs args ret =
+    case ccLibFun ccs of
     Just name => name
-    Nothing => "raise (Idris2_Exception \"Unsupported foreign function " ++ show name ++ " : " ++ show args ++ " -> " ++ show ret ++ "\")"
+    Nothing => case lookup (show name) implNames of
+        Just fn => fn
+        Nothing => "raise (Idris2_Exception \"Unsupported foreign function " ++ show name ++ " : " ++ show args ++ " -> " ++ show ret ++ "\")"

@@ -7,6 +7,8 @@ let as_variant : 'a -> (int * idr2_opaque) = Obj.magic;;
 let as_lazy : 'a -> idr2_opaque lazy_t = Obj.magic;;
 let as_fun : 'a -> ('b -> 'c) = Obj.magic;;
 let as_opaque : 'a -> idr2_opaque = Obj.magic;;
+let as_ref : 'a -> idr2_opaque ref = Obj.magic;;
+let as_array : 'a -> idr2_opaque array = Obj.magic;;
 
 let as_erased : 'a -> unit = Obj.magic;;
 let as_int : 'a -> int = Obj.magic;;
@@ -98,23 +100,22 @@ let string_tail (s : string) : string =
 let string_cons (c : char) (s : string) : string =
   String.init (String.length s + 1) (fun i -> if i == 0 then c else s.[i - 1]);;
 
-(*
- * IO Functions
- *)
-
-let idr2_print_string (s : string) _ = print_string s; as_opaque ();;
-let idr2_get_string (arg_0 : unit) : idr2_opaque = as_opaque (read_line ());;
-let idr2_system (cmd : string) _ : idr2_opaque = as_opaque (Sys.command cmd);;
-
-
-(*
- * Ext Prims
- *)
-let idr2_sys_os () =
-  match Sys.os_type with
-  | "Unix" -> "linux"
-  | _ -> "win32";;
-
+let string_fast_concat (strings : idr2_opaque) : string =
+  let rec s_foldl : 'a . 'a -> ('a -> string -> 'a) -> idr2_opaque -> 'a = fun acc f v -> (
+        match as_variant v with
+        | (0, _) -> acc
+        | (1, fields') ->
+            let (s, rest) : (string * idr2_opaque) = Obj.magic fields' in
+            s_foldl (f acc s) f rest
+  ) in
+  let len = s_foldl 0 (fun acc s -> acc + String.length s) strings in
+  let b = Bytes.create len in
+  let _ = s_foldl (b, 0) (fun (buf, ofs) s -> 
+      let s_len = String.length s in
+      Bytes.blit_string s 0 buf ofs s_len;
+      (buf, ofs + s_len)
+  ) strings in
+  Bytes.to_string b;;
 
 
 (*
