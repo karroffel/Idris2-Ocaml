@@ -10,6 +10,8 @@ import Compiler.CompileExpr
 
 import Core.Context
 
+import Debug.Trace
+
 import Data.NameMap
 import Data.Vect
 import Data.List
@@ -46,4 +48,7 @@ foreignFun name ccs args ret =
     Just name => name
     Nothing => case lookup (show name) implNames of
         Just fn => fn
-        Nothing => "raise (Idris2_Exception \"Unsupported foreign function " ++ show name ++ " : " ++ show args ++ " -> " ++ show ret ++ "\")"
+        Nothing =>
+            let msg = "Unsupported foreign function " ++ show name ++ " : " ++ show args ++ " -> " ++ show ret ++ " | ccs : " ++ show ccs in
+            let src = "raise (Idris2_Exception \"Unsupported foreign function " ++ show name ++ " : " ++ show args ++ " -> " ++ show ret ++ "\")"
+            in trace msg src

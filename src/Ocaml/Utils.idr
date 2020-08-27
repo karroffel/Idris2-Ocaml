@@ -5,6 +5,7 @@ import Compiler.CompileExpr
 
 import Core.Context
 
+import Data.List
 import Data.Vect
 
 export
@@ -43,4 +44,14 @@ fnCall fn args = "(" ++ fn ++ " " ++ showSep " " args ++ ")"
 export
 boolOp : (op : String) -> (a, b : String) -> String
 boolOp op a b = fnCall "int_of_bool" [binOp op a b]
-            
+
+
+
+export
+modFromNamespace : List String -> String
+modFromNamespace ns = "Mod_" ++ concat (intersperse "_" $ reverse ns)
+
+export
+namespace' : Name -> String
+namespace' (NS ns _) = modFromNamespace ns
+namespace' _ = "Misc"

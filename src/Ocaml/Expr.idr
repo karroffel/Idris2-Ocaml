@@ -414,7 +414,7 @@ mutual
 
     mlExpr (NmPrimVal fc val) = mlPrimVal val
     mlExpr (NmErased fc) = pure erased
-    mlExpr (NmCrash fc x) = 
+    mlExpr (NmCrash fc x) =
         let source = fnCall "raise" [fnCall "Idris2_Exception" [mlString $ show x]]
             type = SOpaque
         in pure $ MkMLExpr source type

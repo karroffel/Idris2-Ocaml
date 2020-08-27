@@ -208,7 +208,7 @@ castToString ty = do
         Bits32Type => pure $ \[a] => fnCall "string_of_int" [a]
         Bits64Type => pure $ \[a] => fnCall "Int64.to_string" [a] -- TODO this behaves like signed ints
         DoubleType => pure $ \[a] => fnCall "string_of_float" [a]
-        CharType => pure $ \[a] => fnCall "String.make" ["1", a]
+        CharType => pure $ \[a] => fnCall "OcamlRts.String.of_char" [a]
         _ => throw . InternalError $ "Unsupported cast to String implementation for type " ++ show ty
     pure $ MkPrimFnRes [stypeFromConst ty] SString fn
 
@@ -264,14 +264,14 @@ mlPrimFn (LTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t
 mlPrimFn (EQ ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "==" a b
 mlPrimFn (GTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">=" a b
 mlPrimFn (GT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">" a b
-mlPrimFn StrLength [a] = pure $ MkPrimFnRes [SString] SInt $ \[a] => fnCall "String.length" [a]
-mlPrimFn StrHead [a] = pure $ MkPrimFnRes [SString] SChar $ \[a] => fnCall "string_head" [a]
-mlPrimFn StrTail [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "string_tail" [a]
-mlPrimFn StrIndex [s, i] = pure $ MkPrimFnRes [SString, SInt] SChar $ \[a, i] => fnCall "String.get" [a, i]
-mlPrimFn StrCons [c, s] = pure $ MkPrimFnRes [SChar, SString] SString $ \[c, s] => fnCall "string_cons" [c, s]
+mlPrimFn StrLength [a] = pure $ MkPrimFnRes [SString] SInt $ \[a] => fnCall "OcamlRts.String.length" [a]
+mlPrimFn StrHead [a] = pure $ MkPrimFnRes [SString] SChar $ \[a] => fnCall "OcamlRts.String.head" [a]
+mlPrimFn StrTail [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "OcamlRts.String.tail" [a]
+mlPrimFn StrIndex [s, i] = pure $ MkPrimFnRes [SString, SInt] SChar $ \[a, i] => fnCall "OcamlRts.String.get" [a, i]
+mlPrimFn StrCons [c, s] = pure $ MkPrimFnRes [SChar, SString] SString $ \[c, s] => fnCall "OcamlRts.String.cons" [c, s]
 mlPrimFn StrAppend [a, b] = pure $ MkPrimFnRes [SString, SString] SString $ \[a, b] => binOp "^" a b
-mlPrimFn StrReverse [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "string_reverse" [a]
-mlPrimFn StrSubstr [offset, len, s] = pure $ MkPrimFnRes [SInt, SInt, SString] SString $ \[offset, len, s] => fnCall "String.sub" [s, offset, len]
+mlPrimFn StrReverse [a] = pure $ MkPrimFnRes [SString] SString $ \[a] => fnCall "OcamlRts.String.reverse" [a]
+mlPrimFn StrSubstr [offset, len, s] = pure $ MkPrimFnRes [SInt, SInt, SString] SString $ \[offset, len, s] => fnCall "OcamlRts.String.substring" [offset, len, s]
 mlPrimFn DoubleExp _ = pure $ doubleFn "Float.exp"
 mlPrimFn DoubleLog _ = pure $ doubleFn "Float.log"
 mlPrimFn DoubleSin _ = pure $ doubleFn "Float.sin"
@@ -284,7 +284,7 @@ mlPrimFn DoubleSqrt _ = pure $ doubleFn "Float.sqrt"
 mlPrimFn DoubleFloor _ = pure $ doubleFn "Float.floor"
 mlPrimFn DoubleCeiling _ = pure $ doubleFn "Float.ceil"
 mlPrimFn BelieveMe [_, _, x] = pure $ MkPrimFnRes [SErased, SErased, SOpaque] SOpaque $ \[_, _, x] => x
-mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SErased] SOpaque $ \[_, _] => fnCall "raise" [fnCall "Idris2_Exception" [show $ show msg]]
+mlPrimFn Crash [_, msg] = pure $ MkPrimFnRes [SErased, SString] SOpaque $ \[_, msg] => fnCall "raise" [fnCall "Idris2_Exception" [msg]]
 mlPrimFn (Cast ty IntType) _ = castToInt ty
 mlPrimFn (Cast ty IntegerType) _ = castToInteger ty
 mlPrimFn (Cast ty Bits8Type) _ = castToBits8 ty
