@@ -16,8 +16,16 @@ The following command will build the backend and install the support files in th
 (**NOTE**: I am using VScode and the IDE mode process spawned often causes my RAM to fill and use up swap, so the build command kills all open Idris processes before building)
 
 ```bash
-make all
+make IDRIS2_SOURCE_PATH=path/to/idris2/source all
 ```
+
+The `IDRIS2_SOURCE_PATH` is needed because the runtime C library headers are needed for foreign functions to work.
+
+## Attribution
+
+The files `OcamlRts.ml`, `ocaml_rts.c` are directly taken from the [malfunction backend by ziman and makx](https://github.com/ziman/idris2/tree/malfunction).
+
+The Idris module `Ocaml.Modules` uses some adapted code from the same malfunction backend.
 
 ## License
 
