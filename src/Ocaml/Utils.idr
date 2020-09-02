@@ -55,3 +55,7 @@ export
 namespace' : Name -> String
 namespace' (NS ns _) = modFromNamespace ns
 namespace' _ = "Misc"
+
+public export
+flap : List a -> (a -> b) -> List b
+flap = flip map

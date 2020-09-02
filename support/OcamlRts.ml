@@ -1,7 +1,7 @@
 exception Idris2_Exception of string;;
 
-(* int64 needs to always be boxed, should be a good enough for opaque types *)
-type idr2_opaque = int64;;
+type idr2_opaque;;
+type idr2_char = char;; (* is actually just a byte? Not enough for code points *)
 
 let as_variant : 'a -> (int * idr2_opaque) = Obj.magic;;
 let as_lazy : 'a -> idr2_opaque lazy_t = Obj.magic;;
@@ -18,7 +18,7 @@ let as_bits16 : 'a -> int = Obj.magic;;
 let as_bits32 : 'a -> int = Obj.magic;;
 let as_bits64 : 'a -> int64 = Obj.magic;;
 let as_string : 'a -> string = Obj.magic;;
-let as_char : 'a -> char = Obj.magic;;
+let as_char : 'a -> idr2_char = Obj.magic;;
 let as_double : 'a -> float = Obj.magic;;
 let as_world : 'a -> unit = Obj.magic;;
 
@@ -32,7 +32,7 @@ let hint_bits16 (x : int) : int = x;;
 let hint_bits32 (x : int) : int = x;;
 let hint_bits64 (x : int64) : int64 = x;;
 let hint_string (x : string) : string = x;;
-let hint_char (x : char) : char = x;;
+let hint_char (x : idr2_char) : idr2_char = x;;
 let hint_double (x : float) : float = x;;
 let hint_world (x : unit) : unit = x;;
 let hint_opaque (x : idr2_opaque) : idr2_opaque = x;;
@@ -90,16 +90,6 @@ let cast_bint_bits64 (x : Z.t) : int64 =
 
 let int_of_bool (b : bool) : int = Bool.to_int b;;
 
-let string_reverse (s : string) : string =
-  let len = String.length s in
-  String.init len (fun i -> s.[len - 1 - i]);;
-let string_head (s : string) : char = s.[0];;
-let string_tail (s : string) : string =
-  let len = String.length s in
-  String.sub s 1 (len - 1);;
-let string_cons (c : char) (s : string) : string =
-  String.init (String.length s + 1) (fun i -> if i == 0 then c else s.[i - 1]);;
-
 let string_fast_concat (strings : idr2_opaque) : string =
   let rec s_foldl : 'a . 'a -> ('a -> string -> 'a) -> idr2_opaque -> 'a = fun acc f v -> (
         match as_variant v with
@@ -110,14 +100,24 @@ let string_fast_concat (strings : idr2_opaque) : string =
   ) in
   let len = s_foldl 0 (fun acc s -> acc + String.length s) strings in
   let b = Bytes.create len in
-  let _ = s_foldl (b, 0) (fun (buf, ofs) s -> 
+  let _ = s_foldl (b, 0) (fun (buf, ofs) s ->
       let s_len = String.length s in
       Bytes.blit_string s 0 buf ofs s_len;
       (buf, ofs + s_len)
   ) strings in
   Bytes.to_string b;;
 
+let make_block (tag : int) (args : Obj.t list) : idr2_opaque =
+  let i = ref 0 in
+  let block = Obj.new_block tag (List.length args) in
+  let set (arg : Obj.t) = (Obj.set_field block !i arg; i := !i + 1) in
+  List.iter set args;
+  as_opaque block;;
 
+let get_tag (o : Obj.t) : int =
+  if Obj.is_int o
+    then hint_int (Obj.obj o)
+    else Obj.tag o;;
 
 
 
@@ -145,6 +145,7 @@ module Types = struct
             | UNUSED _ -> failwith "UNUSED tag in idris list"
             | Cons (x, xs) -> foldl f (f z x) xs
     end
+
 end
 open Types
 open Types.IdrisList

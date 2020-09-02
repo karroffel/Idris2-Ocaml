@@ -3,3 +3,4 @@ build/
 *.cmi
 *.cmx
 *.mli
+*.geany
