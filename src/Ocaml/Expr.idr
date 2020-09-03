@@ -219,11 +219,11 @@ mlBlock tag args = MkMLExpr (fnCall "make_block" [show tag, "[" ++ argList ++ "]
         argList = showSep "; " $ map (\a => fnCall "Obj.repr" [a.source]) args
 
 
-data ConMatchType = ConMatchTypeStr | ConMatchBlock
+data ConMatchType = ConMatchTy | ConMatchCon
 
 conMatchType : (alts : List NamedConAlt) -> ConMatchType
-conMatchType (MkNConAlt _ Nothing _ _::_) = ConMatchTypeStr
-conMatchType _ = ConMatchBlock
+conMatchType (MkNConAlt _ Nothing _ _::_) = ConMatchTy
+conMatchType _ = ConMatchCon
 
 mutual
     ||| Generate code for an expression and cast it if needed
@@ -296,13 +296,11 @@ mutual
 
     mlExpr (NmCon fc name Nothing args) = do
         -- Constructors without a tag are type constructors
-        -- which are represented as strings
-        if isCons args
-            then coreLift $ do
-                putStrLn $ "Constructor " ++ show name
-                putStrLn $ "With arguments " ++ show args
-            else pure ()
-        pure $ MkMLExpr (mlString $ show name) SString
+        -- which are represented as blocks with the name and arguments
+        args' <- traverse mlExpr args
+        let nameField = MkMLExpr (mlString $ show name) SString
+
+        pure $ mlBlock 0 $ nameField :: args'
 
     mlExpr (NmCon fc name (Just tag) []) = do
         let src = fnCall "as_opaque" [show tag]
@@ -351,81 +349,43 @@ mutual
                 pure $ " | _ -> " ++ e'.source
             Nothing => pure ""
 
-        src <- case matchTy of
-            ConMatchTypeStr => do
-                expr' <- castedExpr SString expr
-                alts <- for alts \(MkNConAlt name _ _ armExpr) => do
-                    armExpr' <- castedExpr SOpaque armExpr
-                    pure $ "| " ++ mlString (show name) ++ " -> " ++ armExpr'.source
+        expr' <- castedExpr SOpaque expr
+        
+        let matchVal = "let match_val' : Obj.t = Obj.repr " ++ expr'.source ++ " in "
 
-                let header = "match " ++ expr'.source ++ " with "
-                let arms = showSep " " alts ++ def'
+        let (matchExpr, pats, fieldOffset) = the (String, List String, Nat) $ case matchTy of
+                ConMatchTy =>
+                    let matchExpr = "(hint_string (Obj.obj (Obj.field match_val' 0)))" in
+                    let pats = flap alts \(MkNConAlt name _ _ _) => mlString (show name) in
+                    (matchExpr, pats, 1)
+                    
+                ConMatchCon =>
+                    let matchExpr = "(get_tag match_val')" in
+                    let pats = flap alts \(MkNConAlt _ tag _ _) => show (fromMaybe 0 tag) in
+                    (matchExpr, pats, 0)
+        
+        alts <- for (pats `zip` alts) \(pat, MkNConAlt name _ names armExpr) => do
+            let numNames = length names
+            let binderInfo = case lookup name di of
+                    Just info => names `zip` info.argTypes
+                    Nothing => names `zip` (replicate numNames SOpaque)
 
-                pure $ "(" ++ header ++ arms ++ ")"
+            let binders = flap ([0..numNames] `zip` binderInfo) \(i, name, ty) =>
+                        "let " ++ mlName name ++ " : " ++ ocamlTypeName ty
+                            ++ " = Obj.obj (Obj.field match_val' " ++ show (i + fieldOffset) ++ ") in "
 
-            ConMatchBlock => do
-                expr' <- castedExpr SOpaque expr
-                let matchVal = "let match_val' : Obj.t = Obj.repr " ++ expr'.source ++ " in "
-                alts <- for alts \(MkNConAlt name tag names armExpr) => do
+            let funArgs' = fromList binderInfo
+            armExpr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque armExpr
 
-                    let numNames = length names
-                    let binderInfo = case lookup name di of
-                            Just info => names `zip` info.argTypes
-                            Nothing => names `zip` (replicate numNames SOpaque)
+            let src = "| " ++ pat ++ " -> " ++ concat binders ++ armExpr'.source
 
-                    let binders = flap ([0..numNames] `zip` binderInfo) \(i, name, ty) =>
-                                "let " ++ mlName name ++ " : " ++ ocamlTypeName ty
-                                    ++ " = Obj.obj (Obj.field match_val' " ++ show i ++ ") in "
-
-                    let funArgs' = fromList binderInfo
-                    armExpr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque armExpr
-
-                    let src = "| " ++ show (fromMaybe 0 tag) ++ " -> " ++ concat binders ++ armExpr'.source
-
-                    pure src
-
-                pure $ "(" ++ matchVal ++ "(match (get_tag match_val') with " ++ showSep " " alts ++ def' ++ "))"
+            pure src
+        
+        let src = "(" ++ matchVal ++ "(match " ++ matchExpr ++ " with " ++ showSep " " alts ++ def' ++ "))"
 
         pure $ MkMLExpr src SOpaque
-        where
-            alt : {auto di : DefInfos} ->
-                  {auto funArgs : NameMap SType } ->
-                  NamedConAlt ->
-                  Core String
-            alt (MkNConAlt name tag names expr) = do
-                let numNames = length names
-                let tag' = fromMaybe 0 tag
-                let src = "| (" ++ show tag' ++ ", fields') -> "
-                case lookup name di of
-                    Just info => do
-                        let ty = showSep " * " (map ocamlTypeName info.argTypes)
-                            ty' = case numNames of
-                                0 => "unit"
-                                1 => ty
-                                _ => "(" ++ ty ++ ")"
-                            pat = showSep ", " (map mlName names)
-                            pat' = if numNames == 1 then pat else "(" ++ pat ++ ")"
-                            binds = "let " ++ pat' ++ " : " ++ ty' ++ " = Obj.magic fields' in "
-                            funArgs' = fromList (names `zip` info.argTypes)
-
-                        expr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque expr
-                        pure (src ++ binds ++ expr'.source)
-                    Nothing => do
-                        let len = length names
-                            fieldTypes = replicate len SOpaque
-                            ty = showSep " * " (map ocamlTypeName fieldTypes)
-                            ty' = case numNames of
-                                0 => "unit"
-                                1 => ty
-                                _ => "(" ++ ty ++ ")"
-                            pat = showSep ", " (map mlName names)
-                            pat' = if numNames == 1 then pat else "(" ++ pat ++ ")"
-                            binds = "let " ++ pat' ++ " : " ++ ty' ++ " = Obj.magic fields' in "
-                            funArgs' = fromList (names `zip` fieldTypes)
-
-                        expr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque expr
-                        pure (src ++ binds ++ expr'.source)
-
+        
+        
     mlExpr (NmConstCase fc expr alts def) = do
         -- TODO if all alts have the same type then the whole expression
         -- can have the same type too.
