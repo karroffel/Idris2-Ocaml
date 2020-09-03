@@ -113,22 +113,45 @@ compileExpr c tmpDir outputDir tm outfile = do
     let mods = modules ndefs
 
     modules <- for (moduleDefs mods) $ \mod => do
-        let imports = concatMap (++";;\n") $ map ("open "++) (SortedSet.toList mod.deps)
-        defs' <- traverse (\(n,_,d) => mlDef n d) mod.defs
-        let defs'' = filter (/= "") defs'
+        
         let modName = mod.name
-            src = "open OcamlRts;;\n\n" ++
-                imports ++
-                "\nlet rec " ++ showSep "and " defs''
-                ++ ";;"
-
-        let src' = if isNil defs''
-                    then ""
-                    else src
-
         let path = modAbsFileName modName "ml"
-        Right () <- coreLift $ writeFile path src'
-            | Left err => throw $ FileErr path err
+        
+        Right mlFile <- coreLift $ openFile path WriteTruncate
+            | Left err => throw (FileErr path err)
+            
+        let append = \strData => Core.Core.do
+                Right () <- coreLift $ fPutStr mlFile strData
+                    | Left err => throw (FileErr path err)
+                coreLift $ fflush mlFile
+    
+        let imports = concatMap (++";;\n") $ map ("open "++) (SortedSet.toList mod.deps)
+        
+        append $ "open OcamlRts;;\n\n" ++
+                imports ++ "\nlet rec "
+        
+        first <- coreLift $ newIORef True
+        defsWritten <- coreLift $ newIORef (the Int 0)
+        for_ mod.defs \(n,_,d) => do
+            def <- mlDef n d
+            if def == ""
+                then pure ()
+                else do
+                    isFirst <- coreLift $ readIORef first
+                    if isFirst
+                        then coreLift $ writeIORef first False
+                        else append "and "
+                    append def
+                    coreLift $ modifyIORef defsWritten (+1)
+        
+        append ";;"
+        coreLift $ closeFile mlFile
+        
+        if !(coreLift $ readIORef defsWritten) == 0
+            then do
+                _ <- coreLift $ writeFile path ""
+                pure ()
+            else pure ()
 
         pure modName
 
