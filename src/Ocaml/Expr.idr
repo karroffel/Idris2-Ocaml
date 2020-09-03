@@ -51,7 +51,7 @@ mlIdent s =
 
 export
 mlName : Name -> String
-mlName (NS xs x) = "ns__" ++ showSep "'" (reverse xs) ++ "_" ++ mlName x
+mlName (NS ns x) = "ns__" ++ showNSWithSep "'" ns ++ "_" ++ mlName x
 mlName (UN x) = "un__" ++ mlIdent x
 mlName (MN x y) = "mn__" ++ mlIdent x ++ "_" ++ show y
 mlName (PV x y) = "pat__" ++ mlName x ++ "_" ++ show y
@@ -294,9 +294,14 @@ mutual
             type = SOpaque
         pure $ MkMLExpr src type
 
-    mlExpr (NmCon fc name Nothing args) =
+    mlExpr (NmCon fc name Nothing args) = do
         -- Constructors without a tag are type constructors
         -- which are represented as strings
+        if isCons args
+            then coreLift $ do
+                putStrLn $ "Constructor " ++ show name
+                putStrLn $ "With arguments " ++ show args
+            else pure ()
         pure $ MkMLExpr (mlString $ show name) SString
 
     mlExpr (NmCon fc name (Just tag) []) = do

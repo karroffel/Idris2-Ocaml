@@ -48,8 +48,8 @@ boolOp op a b = fnCall "int_of_bool" [binOp op a b]
 
 
 export
-modFromNamespace : List String -> String
-modFromNamespace ns = "Mod_" ++ concat (intersperse "_" $ reverse ns)
+modFromNamespace : Namespace -> String
+modFromNamespace ns = "Mod_" ++ showNSWithSep "_" ns
 
 export
 namespace' : Name -> String
