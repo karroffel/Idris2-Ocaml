@@ -32,9 +32,6 @@ import Ocaml.Modules
 import Ocaml.OcamlCompiler
 
 
-debug : Bool
-debug = True
-
 ||| Generate OCaml code for a "definition" (function, constructor, foreign func, etc)
 mlDef : {auto di : DefInfos} ->
         Name ->
@@ -223,10 +220,10 @@ codegenOcaml : CompilerCommands c => (comp : c) -> Codegen
 codegenOcaml comp = MkCG (compileExpr comp) (executeExpr comp)
 
 main : IO ()
-main = do
-    let nativeC = nativeCompiler Nothing True
-    let bytecodeC = bytecodeCompiler Nothing True
+main =
     mainWithCodegens [
-            ("ocaml-native", codegenOcaml nativeC),
-            ("ocaml-bytecode", codegenOcaml bytecodeC)
+            ("ocaml-native", codegenOcaml $ nativeCompiler Nothing False),
+            ("ocaml-native-debug", codegenOcaml $ nativeCompiler Nothing True),
+            ("ocaml-bytecode", codegenOcaml $ bytecodeCompiler Nothing False),
+            ("ocaml-bytecode-debug", codegenOcaml $ bytecodeCompiler Nothing True)
         ]
