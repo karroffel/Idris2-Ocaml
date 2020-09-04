@@ -22,8 +22,9 @@ import Ocaml.DefInfo
 
 implNames : List (String, String)
 implNames = [
-    ("Data.Strings.fastConcat", "string_fast_concat"),
-    ("System.prim__getArgs", "OcamlRts.System.get_args")
+    ("Data.Strings.fastConcat", "OcamlRts.Bytes.concat"),
+    ("System.prim__getArgs", "OcamlRts.System.get_args"),
+    ("Prelude.Types.fastPack", "OcamlRts.String.pack")
 ]
 
 {-

@@ -261,7 +261,7 @@ mlPrimFn (BXOr Bits64Type) _ = binaryPrimFn SBits64 $ \[a, b] => fnCall "Int64.l
 mlPrimFn (BXOr ty) args = throw $ InternalError ("unimplemented bitwise-xor for type " ++ show ty)
 mlPrimFn (LT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<" a b
 mlPrimFn (LTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "<=" a b
-mlPrimFn (EQ ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "==" a b
+mlPrimFn (EQ ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp "=" a b
 mlPrimFn (GTE ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">=" a b
 mlPrimFn (GT ty) [a, b] = let t = stypeFromConst ty in pure $ MkPrimFnRes [t, t] SInt $ \[a, b] => boolOp ">" a b
 mlPrimFn StrLength [a] = pure $ MkPrimFnRes [SString] SInt $ \[a] => fnCall "OcamlRts.String.length" [a]

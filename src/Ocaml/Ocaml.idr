@@ -197,6 +197,7 @@ compileExpr c tmpDir outputDir tm outfile = do
     for_ cmdFullBuild $ \cmd => do
         let cmd' = "cd " ++ appDirGen ++ " && " ++ cmd
         ok <- the (Core Int) . coreLift $ system cmd'
+        log "codegen.ocaml.build" 10 $ "Running command `" ++ cmd ++ "`"
         if ok /= 0
             then throw . InternalError $ "Command `" ++ cmd ++ "` failed."
             else pure ()

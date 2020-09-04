@@ -90,22 +90,6 @@ let cast_bint_bits64 (x : Z.t) : int64 =
 
 let int_of_bool (b : bool) : int = Bool.to_int b;;
 
-let string_fast_concat (strings : idr2_opaque) : string =
-  let rec s_foldl : 'a . 'a -> ('a -> string -> 'a) -> idr2_opaque -> 'a = fun acc f v -> (
-        match as_variant v with
-        | (0, _) -> acc
-        | (1, fields') ->
-            let (s, rest) : (string * idr2_opaque) = Obj.magic fields' in
-            s_foldl (f acc s) f rest
-  ) in
-  let len = s_foldl 0 (fun acc s -> acc + String.length s) strings in
-  let b = Bytes.create len in
-  let _ = s_foldl (b, 0) (fun (buf, ofs) s ->
-      let s_len = String.length s in
-      Bytes.blit_string s 0 buf ofs s_len;
-      (buf, ofs + s_len)
-  ) strings in
-  Bytes.to_string b;;
 
 let make_block (tag : int) (args : Obj.t list) : idr2_opaque =
   let i = ref 0 in

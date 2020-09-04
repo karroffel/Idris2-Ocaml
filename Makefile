@@ -21,7 +21,6 @@ support:
 .PHONY: install-support
 install-support: support
 	mkdir -p ${PREFIX}/idris2-${IDRIS2_VERSION}/support/ocaml
-	install support/support.ml ${PREFIX}/idris2-${IDRIS2_VERSION}/support/ocaml
 	install support/ocaml_rts.o ${PREFIX}/idris2-${IDRIS2_VERSION}/support/ocaml
 	install support/OcamlRts.ml ${PREFIX}/idris2-${IDRIS2_VERSION}/support/ocaml
 
