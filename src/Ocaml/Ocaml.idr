@@ -225,4 +225,8 @@ codegenOcaml comp = MkCG (compileExpr comp) (executeExpr comp)
 main : IO ()
 main = do
     let nativeC = nativeCompiler Nothing True
-    mainWithCodegens [("ocaml-native", codegenOcaml nativeC)]
+    let bytecodeC = bytecodeCompiler Nothing True
+    mainWithCodegens [
+            ("ocaml-native", codegenOcaml nativeC),
+            ("ocaml-bytecode", codegenOcaml bytecodeC)
+        ]
