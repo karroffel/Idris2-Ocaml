@@ -29,7 +29,11 @@ import Ocaml.DefInfo
 import Ocaml.Foreign
 import Ocaml.Utils
 import Ocaml.Modules
+import Ocaml.OcamlCompiler
 
+
+debug : Bool
+debug = True
 
 ||| Generate OCaml code for a "definition" (function, constructor, foreign func, etc)
 mlDef : {auto di : DefInfos} ->
@@ -86,9 +90,14 @@ mainModule deps expr = do
 
 
 ||| OCaml implementation of the `compileExpr` interface.
-compileExpr : Ref Ctxt Defs -> (tmpDir : String) -> (outputDir : String) ->
-    ClosedTerm -> (outfile : String) -> Core (Maybe String)
-compileExpr c tmpDir outputDir tm outfile = do
+compileExpr : CompilerCommands c => (comp : c) ->
+              Ref Ctxt Defs ->
+              (tmpDir : String) ->
+              (outputDir : String) ->
+              ClosedTerm ->
+              (outfile : String) ->
+              Core (Maybe String)
+compileExpr comp c tmpDir outputDir tm outfile = do
     let appDirRel = outfile ++ "_app" -- relative to build dir
     let appDirGen = outputDir </> appDirRel -- relative to here
     coreLift $ mkdirAll appDirGen
@@ -96,8 +105,7 @@ compileExpr c tmpDir outputDir tm outfile = do
         | Nothing => throw (InternalError "Can't get current directory")
 
     let ext = if isWindows then ".exe" else ""
-    let outBinFile = appDirRel </> outfile <.> ext
-    let outBinAbs = cwd </> outputDir </> outBinFile
+    let outFile = cwd </> outputDir </> outfile <.> ext
 
     cData <- getCompileData Cases tm
     let ndefs = namedDefs cData
@@ -177,44 +185,44 @@ compileExpr c tmpDir outputDir tm outfile = do
     coreLift $ system $ "cp ~/.idris2/idris2-0.2.1/support/ocaml/ocaml_rts.o " ++ appDirGen
     coreLift $ system $ "cp ~/.idris2/idris2-0.2.1/support/ocaml/OcamlRts.ml " ++ appDirGen
 
+    let cmdBuildRts = compileRTSCmd comp "OcamlRts"
+        cmdBuildMods = concat $ [compileModuleCmd comp ns | ns <- modules]
+                                ++ [compileModuleCmd comp "Main"]
+        cmdLink = linkCmd comp
+                    (modules ++ ["Main"])
+                    ["ocaml_rts.o", "libidris2_support.a"]
+                    "OcamlRts"
+                    outFile
+        
+        cmdFull = cmdBuildRts ++ cmdBuildMods ++ cmdLink
 
-    let cmdBuildModules = ["ocamlfind opt -I +threads -package zarith -c -w -20-24-26-8 " ++ modAbsFileName ns "ml" | ns <- modules]
-                            ++ ["ocamlfind opt -I +threads -package zarith -c -w -20-24-26-8 " ++ mainPathML]
-        cmdLink = unwords $ [
-                                "ocamlfind opt -thread -package zarith -linkpkg -nodynlink",
-                                "ocaml_rts.o OcamlRts.cmx libidris2_support.a",
-                                "-w -20-24-26-8"
-                            ] ++
-                            [modAbsFileName ns "cmx" | ns <- modules] ++
-                            [mainPathCMX] ++
-                            ["-o " ++ outBinAbs]
-        cmdFullBuild = [
-                "ocamlfind opt -I +threads -package zarith -w -8 -i OcamlRts.ml > OcamlRts.mli",
-                "ocamlfind opt -I +threads -package zarith -c OcamlRts.mli",
-                "ocamlfind opt -I +threads -package zarith -w -8 -c OcamlRts.ml"
-            ] ++ cmdBuildModules ++ [cmdLink]
-
-    for_ cmdFullBuild $ \cmd => do
+    for_ cmdFull $ \cmd => do
         let cmd' = "cd " ++ appDirGen ++ " && " ++ cmd
         ok <- the (Core Int) . coreLift $ system cmd'
-        log "codegen.ocaml.build" 10 $ "Running command `" ++ cmd ++ "`"
+        log "codegen.ocaml.build" 2 $ "Running command `" ++ cmd ++ "`"
         if ok /= 0
             then throw . InternalError $ "Command `" ++ cmd ++ "` failed."
             else pure ()
 
-    pure (Just outBinAbs)
+    pure (Just outFile)
 
 ||| OCaml implementation of the `executeExpr` interface.
-executeExpr : Ref Ctxt Defs -> (tmpDir : String) -> ClosedTerm -> Core ()
-executeExpr c tmpDir tm = do
-    Just bin <- compileExpr c tmpDir tmpDir tm "tmpocaml"
+executeExpr : CompilerCommands c => (comp : c) ->
+              Ref Ctxt Defs ->
+              (tmpDir : String) ->
+              ClosedTerm ->
+              Core ()
+executeExpr comp c tmpDir tm = do
+    Just bin <- compileExpr comp c tmpDir tmpDir tm "tmpocaml"
         | Nothing => throw (InternalError "compileExpr returned Nothing")
     coreLift $ system bin
     pure ()
 
 export
-codegenOcaml : Codegen
-codegenOcaml = MkCG compileExpr executeExpr
+codegenOcaml : CompilerCommands c => (comp : c) -> Codegen
+codegenOcaml comp = MkCG (compileExpr comp) (executeExpr comp)
 
 main : IO ()
-main = mainWithCodegens [("ocaml", codegenOcaml)]
+main = do
+    let nativeC = nativeCompiler Nothing True
+    mainWithCodegens [("ocaml-native", codegenOcaml nativeC)]

@@ -90,14 +90,6 @@ let cast_bint_bits64 (x : Z.t) : int64 =
 
 let int_of_bool (b : bool) : int = Bool.to_int b;;
 
-
-let make_block (tag : int) (args : Obj.t list) : idr2_opaque =
-  let i = ref 0 in
-  let block = Obj.new_block tag (List.length args) in
-  let set (arg : Obj.t) = (Obj.set_field block !i arg; i := !i + 1) in
-  List.iter set args;
-  as_opaque block;;
-
 let get_tag (o : Obj.t) : int =
   if Obj.is_int o
     then hint_int (Obj.obj o)

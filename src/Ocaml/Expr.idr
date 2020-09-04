@@ -213,10 +213,13 @@ mlPrimValPattern val = throw . InternalError $ "Unsupported primitive in pattern
 
 
 mlBlock : (tag : Int) -> (args : List MLExpr) -> MLExpr
-mlBlock tag args = MkMLExpr (fnCall "make_block" [show tag, "[" ++ argList ++ "]"]) SOpaque
-    where
-        argList : String
-        argList = showSep "; " $ map (\a => fnCall "Obj.repr" [a.source]) args
+mlBlock tag args =
+    let numArgs = length args
+        block = "let block = Obj.new_block " ++ show tag ++ " " ++ show numArgs ++ " in "
+        fieldSets = flap ([0..numArgs] `zip` args) \(i, arg) =>
+            "Obj.set_field block " ++ show i ++ " (Obj.repr " ++ arg.source ++ ");"
+        src = "(" ++ block ++ showSep " " fieldSets ++ "hint_opaque (Obj.obj block))"
+    in MkMLExpr src SOpaque
 
 
 data ConMatchType = ConMatchTy | ConMatchCon
