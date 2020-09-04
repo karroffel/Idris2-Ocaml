@@ -1,4 +1,4 @@
-module Ocaml.OcamlCompiler
+module Ocaml.CompileCommands
 
 import Utils.Path
 

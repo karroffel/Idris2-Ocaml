@@ -29,7 +29,7 @@ import Ocaml.DefInfo
 import Ocaml.Foreign
 import Ocaml.Utils
 import Ocaml.Modules
-import Ocaml.OcamlCompiler
+import Ocaml.CompileCommands
 
 
 ||| Generate OCaml code for a "definition" (function, constructor, foreign func, etc)
