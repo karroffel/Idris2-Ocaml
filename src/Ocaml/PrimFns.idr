@@ -237,7 +237,7 @@ mlPrimFn (Neg IntType) [a] = pure $ MkPrimFnRes [SInt] SInt $ \[a] => fnCall "-"
 mlPrimFn (Neg IntegerType) [a] = pure $ MkPrimFnRes [SInteger] SInteger $ \[a] => fnCall "Z.neg" [a]
 mlPrimFn (Neg DoubleType) [a] = pure $ MkPrimFnRes [SDouble] SDouble $ \[a] => fnCall "-." [a]
 mlPrimFn (ShiftL ty) _ = shiftLFn ty
-mlPrimFn (ShiftR ty) _ = shiftLFn ty
+mlPrimFn (ShiftR ty) _ = shiftRFn ty
 mlPrimFn (BAnd IntType) _ = binaryPrimFn SInt $ \[a, b] => fnCall "Int.logand" [a, b]
 mlPrimFn (BAnd IntegerType) _ = binaryPrimFn SInteger $ \[a, b] => fnCall "Z.logand" [a, b]
 mlPrimFn (BAnd Bits8Type) _ = binaryPrimFn SBits8 $ \[a, b] => bits8Bound (fnCall "Int.logand" [a, b])
