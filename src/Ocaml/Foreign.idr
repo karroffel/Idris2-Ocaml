@@ -20,11 +20,28 @@ import Data.Strings
 
 import Ocaml.DefInfo
 
+idrisSupport : String -> String
+idrisSupport s = "OcamlRts.C.Lib_libidris2_support." ++ s
+
 implNames : List (String, String)
 implNames = [
     ("Data.Strings.fastConcat", "OcamlRts.Bytes.concat"),
     ("System.prim__getArgs", "OcamlRts.System.get_args"),
-    ("Prelude.Types.fastPack", "OcamlRts.String.pack")
+    ("Prelude.Types.fastPack", "OcamlRts.String.pack"),
+    ("Data.Buffer.prim__newBuffer", idrisSupport "idris2_newBuffer"),
+    ("Data.Buffer.prim__bufferSize", idrisSupport "idris2_getBufferSize"),
+    ("Data.Buffer.prim__copyData", idrisSupport "idris2_copyBuffer"),
+    ("Data.Buffer.prim__getByte", idrisSupport "idris2_getBufferByte"),
+    ("Data.Buffer.prim__getDouble", idrisSupport "idris2_getBufferDouble"),
+    ("Data.Buffer.prim__getInt", idrisSupport "idris2_getBufferInt"),
+    ("Data.Buffer.prim__getString", idrisSupport "idris2_getBufferString"),
+    
+    ("Data.Buffer.prim__setByte",  idrisSupport "idris2_setBufferByte"),
+    ("Data.Buffer.prim__setDouble", idrisSupport "idris2_setBufferDouble"),
+    ("Data.Buffer.prim__setInt", idrisSupport "idris2_setBufferInt"),
+    ("Data.Buffer.prim__setString", idrisSupport "idris2_setBufferString")
+
+    
 ]
 
 {-
