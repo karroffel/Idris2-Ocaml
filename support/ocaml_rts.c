@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <time.h>
+
 #include "getline.h"
 #include "idris_buffer.h"
 #include "idris_directory.h"
@@ -878,6 +880,35 @@ CAMLprim value ml_idris2_setBufferInt(value buffer, value loc, value val) {
   CAMLreturn(Val_int(0));
 }
 
+CAMLprim value ml_idris2_setBufferBits8(value buffer, value loc, value val) {
+  CAMLparam3(buffer, loc, val);
+  int8_t iv = Int_val(val);
+  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+  CAMLreturn(Val_int(0));
+}
+
+CAMLprim value ml_idris2_setBufferBits16(value buffer, value loc, value val) {
+  CAMLparam3(buffer, loc, val);
+  int16_t iv = Int_val(val);
+  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+  CAMLreturn(Val_int(0));
+}
+
+CAMLprim value ml_idris2_setBufferBits32(value buffer, value loc, value val) {
+  CAMLparam3(buffer, loc, val);
+  int32_t iv = Int_val(val);
+  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+  CAMLreturn(Val_int(0));
+}
+
+CAMLprim value ml_idris2_setBufferBits64(value buffer, value loc, value val) {
+  CAMLparam3(buffer, loc, val);
+  int64_t iv = Int64_val(val);
+  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+  CAMLreturn(Val_int(0));
+}
+
+
 CAMLprim value ml_idris2_setBufferDouble(value buffer, value loc, value val) {
   CAMLparam3(buffer, loc, val);
   double dv = Double_val(val);
@@ -920,6 +951,34 @@ CAMLprim value ml_idris2_getBufferInt(value buffer, value loc) {
   int64_t iv;
   memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
   CAMLreturn(Val_int(iv));
+}
+
+CAMLprim value ml_idris2_getBufferBits8(value buffer, value loc) {
+  CAMLparam2(buffer, loc);
+  int8_t iv;
+  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+  CAMLreturn(Val_int(iv));
+}
+
+CAMLprim value ml_idris2_getBufferBits16(value buffer, value loc) {
+  CAMLparam2(buffer, loc);
+  int16_t iv;
+  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+  CAMLreturn(Val_int(iv));
+}
+
+CAMLprim value ml_idris2_getBufferBits32(value buffer, value loc) {
+  CAMLparam2(buffer, loc);
+  int32_t iv;
+  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+  CAMLreturn(Val_int(iv));
+}
+
+CAMLprim value ml_idris2_getBufferBits64(value buffer, value loc) {
+  CAMLparam2(buffer, loc);
+  int64_t iv;
+  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+  CAMLreturn(caml_copy_int64(iv));
 }
 
 CAMLprim value ml_idris2_getBufferDouble(value buffer, value loc) {
@@ -1149,4 +1208,138 @@ CAMLprim value ml_idris2_getTermLines(value world) {
 	CAMLparam1(world);
 	int nlines = idris2_getTermLines();
 	CAMLreturn(Val_int(nlines));
+}
+
+// external clocktime_gc_cpu : world -> os_clock = "ml_clocktime_gc_cpu"
+
+CAMLprim value ml_clocktime_gc_cpu(value world) {
+	CAMLparam1(world);
+	CAMLreturn((value) NULL);
+}
+
+// external clocktime_gc_real : world -> os_clock = "ml_clocktime_gc_real"
+    
+CAMLprim value ml_clocktime_gc_real(value world) {
+	CAMLparam1(world);
+	CAMLreturn((value) NULL);
+}
+
+// external clocktime_monotonic : world -> os_clock = "ml_clocktime_monotonic"
+    
+CAMLprim value ml_clocktime_monotonic(value world) {
+	CAMLparam1(world);
+	struct timespec ts = {};
+	int res = clock_gettime(CLOCK_MONOTONIC, &ts);
+	if (res < 0) {
+		CAMLreturn((value) NULL);
+	}
+	
+	CAMLlocal1(result);
+	result = caml_alloc_string(Int_val(sizeof(ts)));
+	
+	memcpy(Bytes_val(result), &ts, sizeof(ts));
+	
+	CAMLreturn(result);
+}
+
+// external clocktime_process : world -> os_clock = "ml_clocktime_process"
+
+CAMLprim value ml_clocktime_process(value world) {
+	CAMLparam1(world);
+	struct timespec ts = {};
+	int res = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+	if (res < 0) {
+		CAMLreturn((value) NULL);
+	}
+	
+	CAMLlocal1(result);
+	result = caml_alloc_string(Int_val(sizeof(ts)));
+	
+	memcpy(Bytes_val(result), &ts, sizeof(ts));
+	
+	CAMLreturn(result);
+}
+
+// external clocktime_thread : world -> os_clock = "ml_clocktime_thread"
+    
+CAMLprim value ml_clocktime_thread(value world) {
+	CAMLparam1(world);
+	struct timespec ts = {};
+	int res = clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+	if (res < 0) {
+		CAMLreturn((value) NULL);
+	}
+	
+	CAMLlocal1(result);
+	result = caml_alloc_string(Int_val(sizeof(ts)));
+	
+	memcpy(Bytes_val(result), &ts, sizeof(ts));
+	
+	CAMLreturn(result);
+}
+
+
+// external clocktime_utc : world -> os_clock = "ml_clocktime_utc"
+
+CAMLprim value ml_clocktime_utc(value world) {
+	CAMLparam1(world);
+	time_t sec = time(NULL);
+	if ((long) sec == 0) {
+		CAMLreturn((value) NULL);
+	}
+	
+	struct timespec ts = {};
+	ts.tv_sec = sec;
+	ts.tv_nsec = 0;
+	
+	CAMLlocal1(result);
+	result = caml_alloc_string(Int_val(sizeof(ts)));
+	
+	memcpy(Bytes_val(result), &ts, sizeof(ts));
+	
+	CAMLreturn(result);
+}
+
+// external os_clock_nanosecond : os_clock -> world -> int64 = "ml_os_clock_nanosecond"
+
+CAMLprim value ml_os_clock_nanosecond(value clock) {
+	CAMLparam1(clock);
+	
+	if ((void *) clock == NULL) {
+		CAMLreturn(caml_copy_int64(0));
+	}
+	
+	struct timespec ts = {};
+	
+	memcpy(&ts, Bytes_val(clock), sizeof(ts));
+	
+	CAMLreturn(caml_copy_int64(ts.tv_nsec));
+}
+
+// external os_clock_second : os_clock -> world -> int64 = "ml_os_clock_second"
+
+CAMLprim value ml_os_clock_second(value clock) {
+	CAMLparam1(clock);
+	
+	if ((void *) clock == NULL) {
+		CAMLreturn(caml_copy_int64(0));
+	}
+	
+	struct timespec ts = {};
+	
+	memcpy(&ts, Bytes_val(clock), sizeof(ts));
+	
+	CAMLreturn(caml_copy_int64(ts.tv_sec));
+}
+    
+// external os_clock_valid : os_clock -> world -> int = "ml_os_clock_valid"
+
+CAMLprim value ml_os_clock_valid(value clock) {
+	CAMLparam1(clock);
+	
+	if ((void *) clock == NULL) {
+		CAMLreturn(Val_int(0));
+	} else {
+		CAMLreturn(Val_int(1));
+	}
 }

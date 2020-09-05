@@ -100,6 +100,7 @@ let get_tag (o : Obj.t) : int =
 (* These types are made to match the Idris representation *)
 module Types = struct
     type world = World
+    type os_clock
 
     module IdrisList = struct
         type 'a idris_list =
@@ -155,6 +156,16 @@ module System = struct
         | "Win32" -> "windows"
         | "Cygwin" -> "windows"
         | _ -> "unknown"
+    
+    external clocktime_gc_cpu : world -> os_clock = "ml_clocktime_gc_cpu"
+    external clocktime_gc_real : world -> os_clock = "ml_clocktime_gc_real"
+    external clocktime_monotonic : world -> os_clock = "ml_clocktime_monotonic"
+    external clocktime_process : world -> os_clock = "ml_clocktime_process"
+    external clocktime_thread : world -> os_clock = "ml_clocktime_thread"
+    external clocktime_utc : world -> os_clock = "ml_clocktime_utc"
+    external os_clock_nanosecond : os_clock -> int64 = "ml_os_clock_nanosecond"
+    external os_clock_second : os_clock -> int64 = "ml_os_clock_second"
+    external os_clock_valid : os_clock -> int = "ml_os_clock_valid"
 end
 
 module String = struct
@@ -258,6 +269,10 @@ module C = struct
 
         external idris2_setBufferByte : 'buffer pointer -> int -> int -> unit = "ml_idris2_setBufferByte"
         external idris2_setBufferInt : 'buffer pointer -> int -> int -> unit = "ml_idris2_setBufferInt"
+        external idris2_setBufferBits8 : 'buffer pointer -> int -> int -> unit = "ml_idris2_setBufferBits8"
+        external idris2_setBufferBits16 : 'buffer pointer -> int -> int -> unit = "ml_idris2_setBufferBits16"
+        external idris2_setBufferBits32 : 'buffer pointer -> int -> int -> unit = "ml_idris2_setBufferBits32"
+        external idris2_setBufferBits64 : 'buffer pointer -> int -> int64 -> unit = "ml_idris2_setBufferBits64"
         external idris2_setBufferDouble : 'buffer pointer -> int -> float -> unit = "ml_idris2_setBufferDouble"
         external idris2_setBufferString : 'buffer pointer -> int -> string -> unit = "ml_idris2_setBufferString"
 
@@ -268,6 +283,10 @@ module C = struct
 
         external idris2_getBufferByte : 'buffer pointer -> int -> int = "ml_idris2_getBufferByte"
         external idris2_getBufferInt : 'buffer pointer -> int -> int = "ml_idris2_getBufferInt"
+        external idris2_getBufferBits8 : 'buffer pointer -> int -> int = "ml_idris2_getBufferBits8"
+        external idris2_getBufferBits16 : 'buffer pointer -> int -> int = "ml_idris2_getBufferBits16"
+        external idris2_getBufferBits32 : 'buffer pointer -> int -> int = "ml_idris2_getBufferBits32"
+        external idris2_getBufferBits64 : 'buffer pointer -> int -> int64 = "ml_idris2_getBufferBits64"
         external idris2_getBufferDouble : 'buffer pointer -> int -> float = "ml_idris2_getBufferDouble"
         external idris2_getBufferString : 'buffer pointer -> int -> int -> string = "ml_idris2_getBufferString"
 
