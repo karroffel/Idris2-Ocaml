@@ -103,9 +103,8 @@ static inline size_t utf8_read(const uint8_t * bytes, size_t length, uint32_t * 
 			return 0;
 		}
 
-		*out_cp =
-			  ((uint32_t) (bytes[0] & 0x1F) << 6)
-			|  (uint32_t) (bytes[1] & 0x3F)
+		*out_cp = ((uint32_t) (bytes[0] & 0x1F) << 6)
+			| (uint32_t) (bytes[1] & 0x3F)
 			;
 		return 2;
 	}
@@ -116,16 +115,12 @@ static inline size_t utf8_read(const uint8_t * bytes, size_t length, uint32_t * 
 			return 0;
 		}
 
-		if (
-			   (bytes[1] & 0xC0) != 0x80
-			|| (bytes[2] & 0xC0) != 0x80
-		) {
+		if ((bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80) {
 			// malformed continuation byte: must be 0b10xx_xxxx
 			return 0;
 		}
 
-		*out_cp =
-			  ((uint32_t) (bytes[0] & 0x0F) << 12)
+		*out_cp = ((uint32_t) (bytes[0] & 0x0F) << 12)
 			| ((uint32_t) (bytes[1] & 0x3F) <<  6)
 			|  (uint32_t) (bytes[2] & 0x3F)
 			;
@@ -139,7 +134,7 @@ static inline size_t utf8_read(const uint8_t * bytes, size_t length, uint32_t * 
 		}
 
 		if (
-			   (bytes[1] & 0xC0) != 0x80
+			(bytes[1] & 0xC0) != 0x80
 			|| (bytes[2] & 0xC0) != 0x80
 			|| (bytes[3] & 0xC0) != 0x80
 		) {
@@ -147,8 +142,7 @@ static inline size_t utf8_read(const uint8_t * bytes, size_t length, uint32_t * 
 			return 0;
 		}
 
-		*out_cp =
-			  ((uint32_t) (bytes[0] & 0x07) << 18)
+		*out_cp = ((uint32_t) (bytes[0] & 0x07) << 18)
 			| ((uint32_t) (bytes[1] & 0x3F) << 12)
 			| ((uint32_t) (bytes[2] & 0x3F) <<  6)
 			|  (uint32_t) (bytes[3] & 0x3F)
@@ -619,15 +613,15 @@ CAMLprim value ml_idris2_openFile(value name, value mode) {
 }
 
 CAMLprim value ml_idris2_closeFile(value file) {
-  CAMLparam1(file);
-  idris2_closeFile((FILE *) file);
-  CAMLreturn(Val_int(0));
+	CAMLparam1(file);
+	idris2_closeFile((FILE *) file);
+	CAMLreturn(Val_int(0));
 }
 
 CAMLprim value ml_idris2_fileError(value file) {
-  CAMLparam1(file);
-  const int result = idris2_fileError((FILE *) file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_fileError((FILE *) file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_fileErrno(value unit)
@@ -638,143 +632,143 @@ CAMLprim value ml_idris2_fileErrno(value unit)
 }
 
 CAMLprim value ml_idris2_removeFile(value name) {
-  CAMLparam1(name);
-  const int result = idris2_removeFile(String_val(name));
-  CAMLreturn(Val_int(result));
+	CAMLparam1(name);
+	const int result = idris2_removeFile(String_val(name));
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_fileSize(value file) {
-  CAMLparam1(file);
-  const int result = idris2_fileSize((FILE *) file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_fileSize((FILE *) file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_fpoll(value file) {
-  CAMLparam1(file);
-  const int result = idris2_fpoll((FILE *) file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_fpoll((FILE *) file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_readLine(value file) {
-  CAMLparam1(file);
-  CAMLlocal1(result);
+	CAMLparam1(file);
+	CAMLlocal1(result);
 
-  char * rptr = idris2_readLine((FILE *) file);
-  result = rptr ? caml_copy_string(rptr) : 0;
-  free(rptr);
+	char * rptr = idris2_readLine((FILE *) file);
+	result = rptr ? caml_copy_string(rptr) : 0;
+	free(rptr);
 
-  CAMLreturn(result);
+	CAMLreturn(result);
 }
 
 CAMLprim value ml_idris2_readChars(value num, value file) {
-  CAMLparam2(num, file);
-  CAMLlocal1(result);
+	CAMLparam2(num, file);
+	CAMLlocal1(result);
 
-  char * rptr = idris2_readChars(Int_val(num), (FILE *) file);
-  result = rptr ? caml_copy_string(rptr) : 0;
-  free(rptr);
+	char * rptr = idris2_readChars(Int_val(num), (FILE *) file);
+	result = rptr ? caml_copy_string(rptr) : 0;
+	free(rptr);
 
-  CAMLreturn(result);
+	CAMLreturn(result);
 }
 
 CAMLprim value ml_idris2_writeLine(value file, value str) {
-  CAMLparam2(file, str);
-  const int result = idris2_writeLine((FILE *) file, String_val(str));
-  CAMLreturn(Val_int(result));
+	CAMLparam2(file, str);
+	const int result = idris2_writeLine((FILE *) file, String_val(str));
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_eof(value file) {
-  CAMLparam1(file);
-  const int result = idris2_eof((FILE *)file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_eof((FILE *)file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_fileAccessTime(value file) {
-  CAMLparam1(file);
-  const int result = idris2_fileAccessTime((FILE *)file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_fileAccessTime((FILE *)file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_fileModifiedTime(value file) {
-  CAMLparam1(file);
-  const int result = idris2_fileModifiedTime((FILE *)file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_fileModifiedTime((FILE *)file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_fileStatusTime(value file) {
-  CAMLparam1(file);
-  const int result = idris2_fileStatusTime((FILE *)file);
-  CAMLreturn(Val_int(result));
+	CAMLparam1(file);
+	const int result = idris2_fileStatusTime((FILE *)file);
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_stdin(value unit) {
-  CAMLparam1(unit);
-  FILE* result = idris2_stdin();
-  CAMLreturn((value) result);
+	CAMLparam1(unit);
+	FILE* result = idris2_stdin();
+	CAMLreturn((value) result);
 }
 
 CAMLprim value ml_idris2_stdout(value unit) {
-  CAMLparam1(unit);
-  FILE* result = idris2_stdout();
-  CAMLreturn((value) result);
+	CAMLparam1(unit);
+	FILE* result = idris2_stdout();
+	CAMLreturn((value) result);
 }
 
 CAMLprim value ml_idris2_stderr(value unit) {
-  CAMLparam1(unit);
-  FILE* result = idris2_stderr();
-  CAMLreturn((value) result);
+	CAMLparam1(unit);
+	FILE* result = idris2_stderr();
+	CAMLreturn((value) result);
 }
 
 CAMLprim value ml_idris2_currentDirectory(value unit) {
-  CAMLparam1(unit);
-  CAMLlocal1(result);
+	CAMLparam1(unit);
+	CAMLlocal1(result);
 
-  char * rptr = idris2_currentDirectory();
-  result = rptr ? caml_copy_string(rptr) : 0;
-  free(rptr);
+	char *rptr = idris2_currentDirectory();
+	result = rptr ? caml_copy_string(rptr) : 0;
+	free(rptr);
 
-  CAMLreturn(result);
+	CAMLreturn(result);
 }
 
 CAMLprim value ml_idris2_changeDir(value dir) {
-  CAMLparam1(dir);
-  const int result = idris2_changeDir(String_val(dir));
-  CAMLreturn(Val_int(result));
+	CAMLparam1(dir);
+	const int result = idris2_changeDir(String_val(dir));
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_createDir(value dir) {
-  CAMLparam1(dir);
-  const int result = idris2_createDir(String_val(dir));
-  CAMLreturn(Val_int(result));
+	CAMLparam1(dir);
+	const int result = idris2_createDir(String_val(dir));
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_openDir(value dir) {
-  CAMLparam1(dir);
-  const void *result = idris2_openDir(String_val(dir));
-  CAMLreturn((value) result);
+	CAMLparam1(dir);
+	const void *result = idris2_openDir(String_val(dir));
+	CAMLreturn((value) result);
 }
 
 CAMLprim value ml_idris2_closeDir(value dirInfo) {
-  CAMLparam1(dirInfo);
-  idris2_closeDir((void *)dirInfo);
-  CAMLreturn(Val_int(0));
+	CAMLparam1(dirInfo);
+	idris2_closeDir((void *)dirInfo);
+	CAMLreturn(Val_int(0));
 }
 
 CAMLprim value ml_idris2_removeDir(value dir) {
-  CAMLparam1(dir);
-  const int result = idris2_removeDir(String_val(dir));
-  CAMLreturn(Val_int(result));
+	CAMLparam1(dir);
+	const int result = idris2_removeDir(String_val(dir));
+	CAMLreturn(Val_int(result));
 }
 
 CAMLprim value ml_idris2_nextDirEntry(value dirInfo) {
-  CAMLparam1(dirInfo);
-  CAMLlocal1(result);
+	CAMLparam1(dirInfo);
+	CAMLlocal1(result);
 
-  const char * rptr = idris2_nextDirEntry((void *)dirInfo);
-  result = rptr ? caml_copy_string(rptr) : 0;
-  // do NOT free rptr here
+	const char * rptr = idris2_nextDirEntry((void *)dirInfo);
+	result = rptr ? caml_copy_string(rptr) : 0;
+	// do NOT free rptr here
 
-  CAMLreturn(result);
+	CAMLreturn(result);
 }
 
 /*  libc stuff  */
@@ -805,406 +799,470 @@ CAMLprim value ml_exit(value s)
 	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_fflush(value file) {
-  CAMLparam1(file);
-  const int result = fflush((FILE *)file);
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_fflush(value file)
+{
+	CAMLparam1(file);
+	const int result = fflush((FILE *)file);
+	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_fdopen(value fd, value mode) {
-  CAMLparam2(fd, mode);
-  FILE * result = fdopen(Int_val(fd), String_val(mode));
-  CAMLreturn((value) result);
+CAMLprim value ml_fdopen(value fd, value mode)
+{
+	CAMLparam2(fd, mode);
+	FILE * result = fdopen(Int_val(fd), String_val(mode));
+	CAMLreturn((value) result);
 }
 
-CAMLprim value ml_chmod(value path, value mode) {
-  CAMLparam2(path, mode);
-  const int result = chmod(String_val(path), Int_val(mode));
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_chmod(value path, value mode)
+{
+	CAMLparam2(path, mode);
+	const int result = chmod(String_val(path), Int_val(mode));
+	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_putchar(value c) {
-  CAMLparam1(c);
-  const int result = putchar(Int_val(c));
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_putchar(value c)
+{
+	CAMLparam1(c);
+	const int result = putchar(Int_val(c));
+	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_getchar(value unit) {
-  CAMLparam1(unit);
-  const int result = getchar();
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_getchar(value unit)
+{
+	CAMLparam1(unit);
+	const int result = getchar();
+	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_strlen(value str) {
-  CAMLparam1(str);
-  size_t len = strlen(String_val(str));
-  CAMLreturn(Val_int(len));
+CAMLprim value ml_strlen(value str)
+{
+	CAMLparam1(str);
+	size_t len = strlen(String_val(str));
+	CAMLreturn(Val_int(len));
 }
 
-CAMLprim value ml_fgetc(value fptr) {
-  CAMLparam1(fptr);
-  CAMLreturn(Val_int(fgetc((FILE *)fptr)));
+CAMLprim value ml_fgetc(value fptr)
+{
+	CAMLparam1(fptr);
+	CAMLreturn(Val_int(fgetc((FILE *)fptr)));
 }
 
 /* buffer stuff */
 
-CAMLprim value ml_idris2_newBuffer(value size) {
-  CAMLparam1(size);
-  CAMLlocal1(result);
-  result = caml_alloc_string(Int_val(size));
-  CAMLreturn(result);
+CAMLprim value ml_idris2_newBuffer(value size)
+{
+	CAMLparam1(size);
+	CAMLlocal1(result);
+	result = caml_alloc_string(Int_val(size));
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idris2_freeBuffer(value buffer) {
-  CAMLparam1(buffer);
-  // nothing to do
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_freeBuffer(value buffer)
+{
+	CAMLparam1(buffer);
+	// nothing to do
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_getBufferSize(value buffer) {
-  CAMLparam1(buffer);
-  const int result = caml_string_length(buffer);
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_idris2_getBufferSize(value buffer)
+{
+	CAMLparam1(buffer);
+	const int result = caml_string_length(buffer);
+	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_idris2_setBufferByte(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  ((uint8_t *) Bytes_val(buffer))[Int_val(loc)] = (uint8_t) Int_val(val);
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferByte(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	((uint8_t *) Bytes_val(buffer))[Int_val(loc)] = (uint8_t) Int_val(val);
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_setBufferInt(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  int64_t iv = Int_val(val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferInt(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	int64_t iv = Int_val(val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_setBufferBits8(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  int8_t iv = Int_val(val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferBits8(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	int8_t iv = Int_val(val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_setBufferBits16(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  int16_t iv = Int_val(val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferBits16(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	int16_t iv = Int_val(val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_setBufferBits32(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  int32_t iv = Int_val(val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferBits32(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	int32_t iv = Int_val(val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_setBufferBits64(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  int64_t iv = Int64_val(val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferBits64(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	int64_t iv = Int64_val(val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), &iv, sizeof(iv));
+	CAMLreturn(Val_int(0));
 }
 
 
-CAMLprim value ml_idris2_setBufferDouble(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  double dv = Double_val(val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), &dv, sizeof(dv));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferDouble(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	double dv = Double_val(val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), &dv, sizeof(dv));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_setBufferString(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  memcpy(Bytes_val(buffer) + Int_val(loc), String_val(val), strlen(String_val(val)));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_setBufferString(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	memcpy(Bytes_val(buffer) + Int_val(loc), String_val(val), strlen(String_val(val)));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_copyBuffer(value from, value start, value len, value to, value loc) {
-  CAMLparam5(from,start,len,to,loc);
-  memcpy(Bytes_val(to) + Int_val(loc), Bytes_val(from) + Int_val(start), Int_val(len));
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idris2_copyBuffer(value from, value start, value len, value to, value loc)
+{
+	CAMLparam5(from,start,len,to,loc);
+	memcpy(Bytes_val(to) + Int_val(loc), Bytes_val(from) + Int_val(start), Int_val(len));
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idris2_readBufferData(value file, value buffer, value loc, value max) {
+CAMLprim value ml_idris2_readBufferData(value file, value buffer, value loc, value max)
+{
 	CAMLparam4(file, buffer, loc, max);
 	const size_t result = fread(Bytes_val(buffer) + Int_val(loc), 1, Int_val(max), (FILE *) file);
 	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_idris2_writeBufferData(value file, value buffer, value loc, value len) {
+CAMLprim value ml_idris2_writeBufferData(value file, value buffer, value loc, value len)
+{
 	CAMLparam4(file, buffer, loc, len);
 	const size_t result = fwrite(Bytes_val(buffer) + Int_val(loc), 1, Int_val(len), (FILE *) file);
 	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_idris2_getBufferByte(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  const uint8_t result = ((uint8_t *) Bytes_val(buffer))[Int_val(loc)];
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_idris2_getBufferByte(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	const uint8_t result = ((uint8_t *) Bytes_val(buffer))[Int_val(loc)];
+	CAMLreturn(Val_int(result));
 }
 
-CAMLprim value ml_idris2_getBufferInt(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  int64_t iv;
-  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
-  CAMLreturn(Val_int(iv));
+CAMLprim value ml_idris2_getBufferInt(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	int64_t iv;
+	memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+	CAMLreturn(Val_int(iv));
 }
 
-CAMLprim value ml_idris2_getBufferBits8(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  int8_t iv;
-  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
-  CAMLreturn(Val_int(iv));
+CAMLprim value ml_idris2_getBufferBits8(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	int8_t iv;
+	memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+	CAMLreturn(Val_int(iv));
 }
 
-CAMLprim value ml_idris2_getBufferBits16(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  int16_t iv;
-  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
-  CAMLreturn(Val_int(iv));
+CAMLprim value ml_idris2_getBufferBits16(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	int16_t iv;
+	memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+	CAMLreturn(Val_int(iv));
 }
 
-CAMLprim value ml_idris2_getBufferBits32(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  int32_t iv;
-  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
-  CAMLreturn(Val_int(iv));
+CAMLprim value ml_idris2_getBufferBits32(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	int32_t iv;
+	memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+	CAMLreturn(Val_int(iv));
 }
 
-CAMLprim value ml_idris2_getBufferBits64(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  int64_t iv;
-  memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
-  CAMLreturn(caml_copy_int64(iv));
+CAMLprim value ml_idris2_getBufferBits64(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	int64_t iv;
+	memcpy(&iv, Bytes_val(buffer) + Int_val(loc), sizeof(iv));
+	CAMLreturn(caml_copy_int64(iv));
 }
 
-CAMLprim value ml_idris2_getBufferDouble(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  CAMLlocal1(result);
+CAMLprim value ml_idris2_getBufferDouble(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	CAMLlocal1(result);
 
-  double dv;
-  memcpy(&dv, Bytes_val(buffer) + Int_val(loc), sizeof(dv));
-  result = caml_copy_double(dv);
+	double dv;
+	memcpy(&dv, Bytes_val(buffer) + Int_val(loc), sizeof(dv));
+	result = caml_copy_double(dv);
 
-  CAMLreturn(result);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idris2_getBufferString(value src, value ofs, value max_width) {
-  CAMLparam3(src, ofs, max_width);
-  CAMLlocal1(dst);
+CAMLprim value ml_idris2_getBufferString(value src, value ofs, value max_width)
+{
+	CAMLparam3(src, ofs, max_width);
+	CAMLlocal1(dst);
 
-  // idris2_getBufferString uses strncpy so we have to find where the NUL terminator is
-  const size_t nbytes = strnlen(Bytes_val(src) + Int_val(ofs), Int_val(max_width));
-  dst = caml_alloc_string(nbytes);  // ocaml null-terminates all strings
-  memcpy(Bytes_val(dst), Bytes_val(src) + Int_val(ofs), nbytes);
+	// idris2_getBufferString uses strncpy so we have to find where the NUL terminator is
+	const size_t nbytes = strnlen(Bytes_val(src) + Int_val(ofs), Int_val(max_width));
+	dst = caml_alloc_string(nbytes);  // ocaml null-terminates all strings
+	memcpy(Bytes_val(dst), Bytes_val(src) + Int_val(ofs), nbytes);
 
-  CAMLreturn(dst);
+	CAMLreturn(dst);
 }
 
 /* Idrnet */
 
-CAMLprim value ml_idrnet_malloc(value size) {
-  CAMLparam1(size);
-  void * result = idrnet_malloc(Val_int(size));
-  CAMLreturn((value) result);
+CAMLprim value ml_idrnet_malloc(value size)
+{
+	CAMLparam1(size);
+	void * result = idrnet_malloc(Val_int(size));
+	CAMLreturn((value) result);
 }
 
-CAMLprim value ml_idrnet_free(value buffer) {
-  CAMLparam1(buffer);
-  idrnet_free((void *) buffer);
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idrnet_free(value buffer)
+{
+	CAMLparam1(buffer);
+	idrnet_free((void *) buffer);
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idrnet_peek(value buffer, value loc) {
-  CAMLparam2(buffer, loc);
-  // TODO
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idrnet_peek(value buffer, value loc)
+{
+	CAMLparam2(buffer, loc);
+	// TODO
+	CAMLreturn(Val_int(0));
 }
-CAMLprim value ml_idrnet_poke(value buffer, value loc, value val) {
-  CAMLparam3(buffer, loc, val);
-  // TODO
-  CAMLreturn(Val_int(0));
-}
-
-CAMLprim value ml_idrnet_errno() {
-  CAMLparam0();
-
-  const int errno = idrnet_errno();
-
-  CAMLreturn(Val_int(errno));
+CAMLprim value ml_idrnet_poke(value buffer, value loc, value val)
+{
+	CAMLparam3(buffer, loc, val);
+	// TODO
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idrnet_socket(value domain, value type, value protocol) {
-  CAMLparam3(domain, type, protocol);
-  // TODO
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idrnet_errno()
+{
+	CAMLparam0();
+
+	const int errno = idrnet_errno();
+
+	CAMLreturn(Val_int(errno));
 }
 
-CAMLprim value ml_idrnet_bind(value sockfd, value family, value socket_type, value host, value port) {
-  CAMLparam5(sockfd, family, socket_type, host, port);
-  // TODO
-  CAMLreturn(Val_int(0));
+CAMLprim value ml_idrnet_socket(value domain, value type, value protocol)
+{
+	CAMLparam3(domain, type, protocol);
+	// TODO
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idrnet_getsockname(value sockfd, value address, value len) {
-  CAMLparam3(sockfd, address, len);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_bind(value sockfd, value family, value socket_type, value host, value port)
+{
+	CAMLparam5(sockfd, family, socket_type, host, port);
+	// TODO
+	CAMLreturn(Val_int(0));
 }
 
-CAMLprim value ml_idrnet_connect(value sockfd, value family, value socket_type, value host, value port) {
-  CAMLparam5(sockfd, family, socket_type, host, port);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_getsockname(value sockfd, value address, value len)
+{
+	CAMLparam3(sockfd, address, len);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_sockaddr_family(value sockaddr) {
-  CAMLparam1(sockaddr);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_connect(value sockfd, value family, value socket_type, value host, value port)
+{
+	CAMLparam5(sockfd, family, socket_type, host, port);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_sockaddr_ipv4(value sockaddr) {
-  CAMLparam1(sockaddr);
-  value result = Val_int(0);
-  CAMLreturn(result);
-}
-CAMLprim value ml_idrnet_sockaddr_ipv4_port(value sockaddr) {
-  CAMLparam1(sockaddr);
-  value result = Val_int(0);
-  CAMLreturn(result);
-}
-CAMLprim value ml_idrnet_create_sockaddr() {
-  CAMLparam0();
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_sockaddr_family(value sockaddr)
+{
+	CAMLparam1(sockaddr);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_accept(value sockaddr) {
-  CAMLparam1(sockaddr);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_sockaddr_ipv4(value sockaddr)
+{
+	CAMLparam1(sockaddr);
+	value result = Val_int(0);
+	CAMLreturn(result);
+}
+CAMLprim value ml_idrnet_sockaddr_ipv4_port(value sockaddr)
+{
+	CAMLparam1(sockaddr);
+	value result = Val_int(0);
+	CAMLreturn(result);
+}
+CAMLprim value ml_idrnet_create_sockaddr()
+{
+	CAMLparam0();
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_send(value sockfd, value data) {
-  CAMLparam2(sockfd, data);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_accept(value sockaddr)
+{
+	CAMLparam1(sockaddr);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_send_buf(value sockfd, value data, value len) {
-  CAMLparam3(sockfd, data, len);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_send(value sockfd, value data)
+{
+	CAMLparam2(sockfd, data);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_recv(value sockfd, value len) {
-  CAMLparam2(sockfd, len);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_send_buf(value sockfd, value data, value len)
+{
+	CAMLparam3(sockfd, data, len);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_recv_buf(value sockfd, value buf, value len) {
-  CAMLparam3(sockfd, buf, len);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_recv(value sockfd, value len)
+{
+	CAMLparam2(sockfd, len);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_sendto(value sockfd, value data, value host, value port, value family) {
-  CAMLparam5(sockfd, data, host, port, family);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_recv_buf(value sockfd, value buf, value len)
+{
+	CAMLparam3(sockfd, buf, len);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_sendto_buf_native(value sockfd, value buf, value len, value host, value port, value family) {
-  CAMLparam5(sockfd, buf, len, host, port);
-  CAMLxparam1(family);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_sendto(value sockfd, value data, value host, value port, value family)
+{
+	CAMLparam5(sockfd, data, host, port, family);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_sendto_buf_bytecode(value * argv, int argn ) {
-  // TODO: Assert argn == 6?
-  return ml_idrnet_sendto_buf_native(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+CAMLprim value ml_idrnet_sendto_buf_native(value sockfd, value buf, value len, value host, value port, value family)
+{
+	CAMLparam5(sockfd, buf, len, host, port);
+	CAMLxparam1(family);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_recvfrom(value sockfd, value len) {
-  CAMLparam2(sockfd, len);
-  value result = Val_int(0);
-  CAMLreturn(result);
-}
-CAMLprim value ml_idrnet_recvfrom_buf(value sockfd, value buf, value len) {
-  CAMLparam3(sockfd, buf, len);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_sendto_buf_bytecode(value * argv, int argn )
+{
+	// TODO: Assert argn == 6?
+	return ml_idrnet_sendto_buf_native(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
 }
 
-CAMLprim value ml_idrnet_get_recv_res(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_recvfrom(value sockfd, value len)
+{
+	CAMLparam2(sockfd, len);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
-CAMLprim value ml_idrnet_get_recv_payload(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
-}
-CAMLprim value ml_idrnet_free_recv_struct(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_recvfrom_buf(value sockfd, value buf, value len)
+{
+	CAMLparam3(sockfd, buf, len);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_get_recvfrom_res(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_get_recv_res(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
-CAMLprim value ml_idrnet_get_recvfrom_payload(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_get_recv_payload(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
-CAMLprim value ml_idrnet_get_recvfrom_sockaddr(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
-}
-
-CAMLprim value ml_idrnet_free_recvfrom_struct(value res_struct) {
-  CAMLparam1(res_struct);
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_free_recv_struct(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idrnet_geteagain() {
-  CAMLparam0();
-  value result = Val_int(0);
-  CAMLreturn(result);
+CAMLprim value ml_idrnet_get_recvfrom_res(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
+}
+CAMLprim value ml_idrnet_get_recvfrom_payload(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
+}
+CAMLprim value ml_idrnet_get_recvfrom_sockaddr(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idris2_listen(value socket, value backlog) {
-  CAMLparam2(socket, backlog);
-  const int result = listen(socket, backlog);
-  CAMLreturn(Val_int(result));
+CAMLprim value ml_idrnet_free_recvfrom_struct(value res_struct)
+{
+	CAMLparam1(res_struct);
+	value result = Val_int(0);
+	CAMLreturn(result);
 }
 
-CAMLprim value ml_idris2_setupTerm(value world) {
+CAMLprim value ml_idrnet_geteagain()
+{
+	CAMLparam0();
+	value result = Val_int(0);
+	CAMLreturn(result);
+}
+
+CAMLprim value ml_idris2_listen(value socket, value backlog)
+{
+	CAMLparam2(socket, backlog);
+	const int result = listen(socket, backlog);
+	CAMLreturn(Val_int(result));
+}
+
+CAMLprim value ml_idris2_setupTerm(value world)
+{
 	CAMLparam1(world);
 	idris2_setupTerm();
 	CAMLreturn(Val_int(0));  // unit
 }
 
-CAMLprim value ml_idris2_getTermCols(value world) {
+CAMLprim value ml_idris2_getTermCols(value world)
+{
 	CAMLparam1(world);
 	int ncols = idris2_getTermCols();
 	CAMLreturn(Val_int(ncols));
 }
 
-CAMLprim value ml_idris2_getTermLines(value world) {
+CAMLprim value ml_idris2_getTermLines(value world)
+{
 	CAMLparam1(world);
 	int nlines = idris2_getTermLines();
 	CAMLreturn(Val_int(nlines));
@@ -1212,21 +1270,24 @@ CAMLprim value ml_idris2_getTermLines(value world) {
 
 // external clocktime_gc_cpu : world -> os_clock = "ml_clocktime_gc_cpu"
 
-CAMLprim value ml_clocktime_gc_cpu(value world) {
+CAMLprim value ml_clocktime_gc_cpu(value world)
+{
 	CAMLparam1(world);
 	CAMLreturn((value) NULL);
 }
 
 // external clocktime_gc_real : world -> os_clock = "ml_clocktime_gc_real"
-    
-CAMLprim value ml_clocktime_gc_real(value world) {
+		
+CAMLprim value ml_clocktime_gc_real(value world)
+{
 	CAMLparam1(world);
 	CAMLreturn((value) NULL);
 }
 
 // external clocktime_monotonic : world -> os_clock = "ml_clocktime_monotonic"
-    
-CAMLprim value ml_clocktime_monotonic(value world) {
+		
+CAMLprim value ml_clocktime_monotonic(value world)
+{
 	CAMLparam1(world);
 	struct timespec ts = {};
 	int res = clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -1244,7 +1305,8 @@ CAMLprim value ml_clocktime_monotonic(value world) {
 
 // external clocktime_process : world -> os_clock = "ml_clocktime_process"
 
-CAMLprim value ml_clocktime_process(value world) {
+CAMLprim value ml_clocktime_process(value world)
+{
 	CAMLparam1(world);
 	struct timespec ts = {};
 	int res = clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
@@ -1261,8 +1323,9 @@ CAMLprim value ml_clocktime_process(value world) {
 }
 
 // external clocktime_thread : world -> os_clock = "ml_clocktime_thread"
-    
-CAMLprim value ml_clocktime_thread(value world) {
+		
+CAMLprim value ml_clocktime_thread(value world)
+{
 	CAMLparam1(world);
 	struct timespec ts = {};
 	int res = clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
@@ -1281,7 +1344,8 @@ CAMLprim value ml_clocktime_thread(value world) {
 
 // external clocktime_utc : world -> os_clock = "ml_clocktime_utc"
 
-CAMLprim value ml_clocktime_utc(value world) {
+CAMLprim value ml_clocktime_utc(value world)
+{
 	CAMLparam1(world);
 	time_t sec = time(NULL);
 	if ((long) sec == 0) {
@@ -1302,7 +1366,8 @@ CAMLprim value ml_clocktime_utc(value world) {
 
 // external os_clock_nanosecond : os_clock -> world -> int64 = "ml_os_clock_nanosecond"
 
-CAMLprim value ml_os_clock_nanosecond(value clock) {
+CAMLprim value ml_os_clock_nanosecond(value clock)
+{
 	CAMLparam1(clock);
 	
 	if ((void *) clock == NULL) {
@@ -1318,7 +1383,8 @@ CAMLprim value ml_os_clock_nanosecond(value clock) {
 
 // external os_clock_second : os_clock -> world -> int64 = "ml_os_clock_second"
 
-CAMLprim value ml_os_clock_second(value clock) {
+CAMLprim value ml_os_clock_second(value clock)
+{
 	CAMLparam1(clock);
 	
 	if ((void *) clock == NULL) {
@@ -1331,10 +1397,11 @@ CAMLprim value ml_os_clock_second(value clock) {
 	
 	CAMLreturn(caml_copy_int64(ts.tv_sec));
 }
-    
+		
 // external os_clock_valid : os_clock -> world -> int = "ml_os_clock_valid"
 
-CAMLprim value ml_os_clock_valid(value clock) {
+CAMLprim value ml_os_clock_valid(value clock)
+{
 	CAMLparam1(clock);
 	
 	if ((void *) clock == NULL) {
