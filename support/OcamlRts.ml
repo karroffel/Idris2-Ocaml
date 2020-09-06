@@ -1,41 +1,23 @@
 exception Idris2_Exception of string;;
 
-type idr2_opaque;;
 type idr2_char = char;; (* is actually just a byte? Not enough for code points *)
 
-let as_variant : 'a -> (int * idr2_opaque) = Obj.magic;;
-let as_lazy : 'a -> idr2_opaque lazy_t = Obj.magic;;
-let as_fun : 'a -> ('b -> 'c) = Obj.magic;;
-let as_opaque : 'a -> idr2_opaque = Obj.magic;;
-let as_ref : 'a -> idr2_opaque ref = Obj.magic;;
-let as_array : 'a -> idr2_opaque array = Obj.magic;;
+let as_lazy : Obj.t -> Obj.t lazy_t = Obj.obj;;
+let as_fun : Obj.t -> (Obj.t -> Obj.t) = Obj.obj;;
+let as_ref : Obj.t -> Obj.t ref = Obj.obj;;
+let as_array : Obj.t -> Obj.t array = Obj.obj;;
 
-let as_erased : 'a -> unit = Obj.magic;;
-let as_int : 'a -> int = Obj.magic;;
-let as_bint : 'a -> Z.t = Obj.magic;;
-let as_bits8 : 'a -> int = Obj.magic;;
-let as_bits16 : 'a -> int = Obj.magic;;
-let as_bits32 : 'a -> int = Obj.magic;;
-let as_bits64 : 'a -> int64 = Obj.magic;;
-let as_string : 'a -> string = Obj.magic;;
-let as_char : 'a -> idr2_char = Obj.magic;;
-let as_double : 'a -> float = Obj.magic;;
-let as_world : 'a -> unit = Obj.magic;;
-
-(* Used to give type hints for function return types *)
-
-let hint_erased (x : unit) : unit = x;;
-let hint_int (x : int) : int = x;;
-let hint_bint (x : Z.t) : Z.t = x;;
-let hint_bits8 (x : int) : int = x;;
-let hint_bits16 (x : int) : int = x;;
-let hint_bits32 (x : int) : int = x;;
-let hint_bits64 (x : int64) : int64 = x;;
-let hint_string (x : string) : string = x;;
-let hint_char (x : idr2_char) : idr2_char = x;;
-let hint_double (x : float) : float = x;;
-let hint_world (x : unit) : unit = x;;
-let hint_opaque (x : idr2_opaque) : idr2_opaque = x;;
+let as_erased (x : Obj.t) : unit = ();;
+let as_int : Obj.t -> int = Obj.obj;;
+let as_bint : Obj.t -> Z.t = Obj.obj;;
+let as_bits8 : Obj.t -> int = Obj.obj;;
+let as_bits16 : Obj.t -> int = Obj.obj;;
+let as_bits32 : Obj.t -> int = Obj.obj;;
+let as_bits64 : Obj.t -> int64 = Obj.obj;;
+let as_string : Obj.t -> string = Obj.obj;;
+let as_char : Obj.t -> idr2_char = Obj.obj;;
+let as_double : Obj.t -> float = Obj.obj;;
+let as_world (x : Obj.t) : unit = ();;
 
 
 (* Primitive functions *)
@@ -92,7 +74,7 @@ let int_of_bool (b : bool) : int = Bool.to_int b;;
 
 let get_tag (o : Obj.t) : int =
   if Obj.is_int o
-    then hint_int (Obj.obj o)
+    then Obj.obj o
     else Obj.tag o;;
 
 

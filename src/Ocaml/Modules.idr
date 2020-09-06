@@ -1,5 +1,6 @@
 module Ocaml.Modules
 
+import Compiler.ANF
 import Compiler.Common
 import Compiler.CompileExpr
 
@@ -21,13 +22,13 @@ adjust k f m =
         Just v => insert k (f v) m
 
 
-splitByNamespace : List (Name, FC, NamedDef) -> List (String, List (Name, FC, NamedDef))
+splitByNamespace : List (Name, ANFDef) -> List (String, List (Name, ANFDef))
 splitByNamespace = StringMap.toList . foldl addOne StringMap.empty
     where
-        addOne : StringMap (List (Name, FC, NamedDef)) ->
-                 (Name, FC, NamedDef) ->
-                 StringMap (List (Name, FC, NamedDef))
-        addOne nss def@(n, fc, nd) =
+        addOne : StringMap (List (Name, ANFDef)) ->
+                 (Name, ANFDef) ->
+                 StringMap (List (Name, ANFDef))
+        addOne nss def@(n, nd) =
             StringMap.mergeWith
                 (++)
                 (StringMap.singleton (namespace' n) [def])
@@ -41,13 +42,13 @@ splitByNamespace = StringMap.toList . foldl addOne StringMap.empty
 
 -- forward declaration
 tarjan : StringMap (SortedSet String) -> List (List String)
-findExpr : NamedCExp -> SortedSet String
+findExpr : ANF -> SortedSet String
 
-nsDef : NamedDef -> SortedSet String
-nsDef (MkNmFun argNs rhs) = findExpr rhs
-nsDef (MkNmCon tag arity nt) = SortedSet.empty
-nsDef (MkNmForeign ccs fargs rty) = SortedSet.empty
-nsDef (MkNmError rhs) = findExpr rhs
+nsDef : ANFDef -> SortedSet String
+nsDef (MkAFun argNs rhs) = findExpr rhs
+nsDef (MkACon tag arity) = SortedSet.empty
+nsDef (MkAForeign ccs fargs rty) = SortedSet.empty
+nsDef (MkAError rhs) = findExpr rhs
 
 ||| Information about module splitting
 |||
@@ -62,7 +63,7 @@ record ModulesInfo where
     constructor MkModulesInfo
     components : List (List String)
     namespaceMapping : StringMap String
-    defsByNamespace : StringMap (List (Name, FC, NamedDef))
+    defsByNamespace : StringMap (List (Name, ANFDef))
     dependencies : StringMap (SortedSet String)
 
 total
@@ -71,11 +72,11 @@ moduleGroupIdentifier : (l : List String) -> NonEmpty l => String
 moduleGroupIdentifier (n::ns) = (foldl min n ns)
 
 export
-modules : List (Name, FC, NamedDef) -> ModulesInfo
+modules : List (Name, ANFDef) -> ModulesInfo
 modules defs =
     let
         defsByNS = StringMap.fromList $ splitByNamespace defs
-        defDepsRaw = [StringMap.singleton (namespace' n) (SortedSet.delete (namespace' n) (nsDef d)) | (n, fc, d) <- defs]
+        defDepsRaw = [StringMap.singleton (namespace' n) (SortedSet.delete (namespace' n) (nsDef d)) | (n, d) <- defs]
         defDeps = foldl (StringMap.mergeWith SortedSet.union) StringMap.empty defDepsRaw
         components = reverse $ tarjan defDeps  -- tarjan generates reverse toposort
         nsMapping = foldl
@@ -96,7 +97,7 @@ public export
 record Module where
     constructor MkModule
     name : String
-    defs : List (Name, FC, NamedDef)
+    defs : List (Name, ANFDef)
     deps : SortedSet String
 
 export
@@ -235,27 +236,22 @@ tarjan deps = loop initialState (StringMap.keys deps)
 -- find references to other namespaces
 
 mutual
-    findExpr (NmLocal fc x) = SortedSet.empty
-    findExpr (NmRef fc x) = SortedSet.insert (namespace' x) SortedSet.empty
-    findExpr (NmLam fc x expr) = findExpr expr
-    findExpr (NmLet fc x rhs expr) = findExpr rhs <+> findExpr expr
-    findExpr (NmApp fc base args) = findExpr base <+> concatMap findExpr args
-    findExpr (NmCon fc name tag args) = concatMap findExpr args
-    findExpr (NmOp fc fn args) = concatMap findExpr args
-    findExpr (NmExtPrim fc name args) = concatMap findExpr args
-    findExpr (NmForce fc expr) = findExpr expr
-    findExpr (NmDelay fc expr) = findExpr expr
-    findExpr (NmConCase fc expr alts def) = findExpr expr <+> concatMap findConAlt alts <+> concatMap findExpr def
-    findExpr (NmConstCase fc expr alts def) = findExpr expr <+> concatMap findConstAlt alts <+> concatMap findExpr def
-    findExpr (NmPrimVal fc val) = SortedSet.empty
-    findExpr (NmErased fc) = SortedSet.empty
-    findExpr (NmCrash fc x) = SortedSet.empty
+    findExpr (AV fc v) = SortedSet.empty
+    findExpr (AAppName fc name args) = SortedSet.insert (namespace' name) SortedSet.empty
+    findExpr (AUnderApp fc name missing args) = SortedSet.insert (namespace' name) SortedSet.empty
+    findExpr (AApp fc base arg) = SortedSet.empty
+    findExpr (ALet fc var rhs expr) = findExpr rhs <+> findExpr expr
+    findExpr (ACon fc name tag args) = SortedSet.empty
+    findExpr (AOp fc fn args) = SortedSet.empty
+    findExpr (AExtPrim fc name args) = SortedSet.empty
+    findExpr (AConCase fc _ alts def) = concatMap findConAlt alts <+> concatMap findExpr def
+    findExpr (AConstCase fc _ alts def) = concatMap findConstAlt alts <+> concatMap findExpr def
+    findExpr (APrimVal fc _) = SortedSet.empty
+    findExpr (AErased fc) = SortedSet.empty
+    findExpr (ACrash fc msg) = SortedSet.empty
     
-    findConAlt : NamedConAlt -> SortedSet String
-    findConAlt (MkNConAlt _ _ _ rhs) = findExpr rhs
+    findConAlt : AConAlt -> SortedSet String
+    findConAlt (MkAConAlt name tag args rhs) = findExpr rhs
     
-    findConstAlt : NamedConstAlt -> SortedSet String
-    findConstAlt (MkNConstAlt _ rhs) = findExpr rhs
-
-
-
+    findConstAlt : AConstAlt -> SortedSet String
+    findConstAlt (MkAConstAlt const rhs) = findExpr rhs

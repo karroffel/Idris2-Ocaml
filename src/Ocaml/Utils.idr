@@ -45,6 +45,9 @@ export
 boolOp : (op : String) -> (a, b : String) -> String
 boolOp op a b = fnCall "int_of_bool" [binOp op a b]
 
+export
+mlRepr : String -> String
+mlRepr s = fnCall "Obj.repr" [s]
 
 
 export
@@ -52,6 +55,49 @@ namespace' : Name -> String
 namespace' (NS ns _) = "Mod_" ++ showSep "_" (reverse ns)
 namespace' _ = "Misc"
 
+export
+mlVarname : Int -> String
+mlVarname i = "var_" ++ show i
+
+
 public export
 flap : List a -> (a -> b) -> List b
 flap = flip map
+
+
+
+export
+asInt : String -> String
+asInt s = fnCall "as_int" [s]
+
+export
+asBint : String -> String
+asBint s = fnCall "as_bint" [s]
+
+export
+asBits8 : String -> String
+asBits8 s = fnCall "as_bits8" [s]
+
+export
+asBits16 : String -> String
+asBits16 s = fnCall "as_bits16" [s]
+
+export
+asBits32 : String -> String
+asBits32 s = fnCall "as_bits32" [s]
+
+export
+asBits64 : String -> String
+asBits64 s = fnCall "as_bits64" [s]
+
+export
+asString : String -> String
+asString s = fnCall "as_string" [s]
+
+export
+asChar : String -> String
+asChar s = fnCall "as_char" [s]
+
+export
+asDouble : String -> String
+asDouble s = fnCall "as_double" [s]

@@ -6,6 +6,7 @@
 ||| only insert the casts that are necessary.
 module Ocaml.Expr
 
+import Compiler.ANF
 import Compiler.Common
 import Compiler.CompileExpr
 
@@ -62,90 +63,6 @@ mlName (WithBlock x y) = "with__" ++ mlIdent x ++ "_" ++ show y
 mlName (Resolved x) = "fn__" ++ show x
 
 
-||| Compiled OCaml code for an expression, including the `SType`.
-|||
-||| The generated OCaml code should always have same type as the `type` field.
-||| This allows casts to only be inserted when needed.
-|||
-||| The tracking of types is a small abstract interpretation, only primitive
-||| types are supported and everything else is `SOpaque`.
-public export
-record MLExpr where
-    constructor MkMLExpr
-    source : String
-    type : SType
-
-public export
-empty : MLExpr
-empty = MkMLExpr "" SOpaque
-
-public export
-erased : MLExpr
-erased = MkMLExpr "()" SErased
-
-||| The name of the OCaml support function that serve as a hint to the OCaml
-||| type checker.
-|||
-||| This is needed when function values (which are represented as `SOpaque`) are
-||| called. The type of the arguments are found automatically when using
-||| `Obj.magic`, but the return type can't always be inferred.
-|||
-||| These hint functions act like the Idris function `the type` and only
-||| provides a hint.
-hintFn : SType -> String
-hintFn SErased = "hint_erased"
-hintFn SInt = "hint_int"
-hintFn SInteger = "hint_bint"
-hintFn SBits8 = "hint_bits8"
-hintFn SBits16 = "hint_bits16"
-hintFn SBits32 = "hint_bits32"
-hintFn SBits64 = "hint_bits64"
-hintFn SString = "hint_string"
-hintFn SChar = "hint_char"
-hintFn SDouble = "hint_double"
-hintFn SWorld = "hint_world"
-hintFn SOpaque = "hint_opaque"
-
-||| The name of OCaml type used to represent values of `SType`s.
-export
-ocamlTypeName : SType -> String
-ocamlTypeName SErased = "unit"
-ocamlTypeName SInt = "int"
-ocamlTypeName SInteger = "Z.t"
-ocamlTypeName SBits8 = "int"
-ocamlTypeName SBits16 = "int"
-ocamlTypeName SBits32 = "int"
-ocamlTypeName SBits64 = "int64"
-ocamlTypeName SString = "string"
-ocamlTypeName SChar = "idr2_char"
-ocamlTypeName SDouble = "float"
-ocamlTypeName SWorld = "unit"
-ocamlTypeName SOpaque = "idr2_opaque"
-
-||| The name of the OCaml function that will cast an expression to a type
-|||
-||| These casts are less "conversion" casts and rather "reinterpret the data"
-||| type casts. The values are unchanged and the casts only apply to the types.
-export
-castFn : SType -> String
-castFn SErased = "as_erased"
-castFn SInt = "as_int"
-castFn SInteger = "as_bint"
-castFn SBits8 = "as_bits8"
-castFn SBits16 = "as_bits16"
-castFn SBits32 = "as_bits32"
-castFn SBits64 = "as_bits64"
-castFn SString = "as_string"
-castFn SChar = "as_char"
-castFn SDouble = "as_double"
-castFn SWorld = "as_world"
-castFn SOpaque = "as_opaque"
-
-||| The name of the OCaml function that casts an expression to a type *if* the
-||| cast is needed
-maybeCastFn : (from, to : SType) -> Maybe String
-maybeCastFn from to = if from == to then Nothing else Just (castFn to)
-
 mlChar : Char -> String
 mlChar c = "\'" ++ (okchar c) ++ "\'"
     where
@@ -180,17 +97,17 @@ mlString s = "\"" ++ (concatMap okchar (unpack s)) ++ "\""
 
 
 ||| Generate OCaml code for constant values
-mlPrimVal : Constant -> Core MLExpr
-mlPrimVal (I x) = pure $ MkMLExpr (show x) SInt
-mlPrimVal (BI x) = pure $ MkMLExpr (fnCall "Z.of_string" [mlString (show x)]) SInteger
-mlPrimVal (B8 x) = pure $ MkMLExpr (show x) SBits8
-mlPrimVal (B16 x) = pure $ MkMLExpr (show x) SBits16
-mlPrimVal (B32 x) = pure $ MkMLExpr (show x) SBits32
-mlPrimVal (B64 x) = pure $ MkMLExpr (show x ++ "L") SBits64
-mlPrimVal (Str x) = pure $ MkMLExpr (mlString x) SString
-mlPrimVal (Ch x) = pure $ MkMLExpr (mlChar x) SChar
-mlPrimVal (Db x) = pure $ MkMLExpr (show x) SDouble
-mlPrimVal WorldVal = pure $ MkMLExpr "()" SWorld
+mlPrimVal : Constant -> Core String
+mlPrimVal (I x) = pure . mlRepr $ (show x)
+mlPrimVal (BI x) = pure . mlRepr $ fnCall "Z.of_string" [mlString (show x)]
+mlPrimVal (B8 x) = pure . mlRepr $ show x
+mlPrimVal (B16 x) = pure . mlRepr $ show x
+mlPrimVal (B32 x) = pure . mlRepr $ show x
+mlPrimVal (B64 x) = pure . mlRepr $ show x ++ "L"
+mlPrimVal (Str x) = pure . mlRepr $ mlString x
+mlPrimVal (Ch x) = pure . mlRepr $ mlChar x
+mlPrimVal (Db x) = pure . mlRepr $ show x
+mlPrimVal WorldVal = pure $ mlRepr "()"
 mlPrimVal val = throw . InternalError $ "Unsupported primitive value: " ++ show val
 
 ||| Generate patterns for constant values
@@ -198,130 +115,76 @@ mlPrimVal val = throw . InternalError $ "Unsupported primitive value: " ++ show 
 ||| Patterns can differ from "value" expressions for some types.
 ||| The type is also tracked so that the expression to be matched on can be
 ||| casted accordingly.
-mlPrimValPattern : Constant -> Core (String, SType)
-mlPrimValPattern (I x) = pure (show x, SInt)
-mlPrimValPattern (BI x) = pure (mlString (show x), SInteger)
-mlPrimValPattern (B8 x) = pure (show x, SBits8)
-mlPrimValPattern (B16 x) = pure (show x, SBits16)
-mlPrimValPattern (B32 x) = pure (show x, SBits32)
-mlPrimValPattern (B64 x) = pure (show x ++ "L", SBits64)
-mlPrimValPattern (Str x) = pure (mlString x, SString)
-mlPrimValPattern (Ch x) = pure (mlChar x, SChar)
-mlPrimValPattern (Db x) = pure (show x, SDouble)
-mlPrimValPattern WorldVal = pure ("()", SWorld)
+mlPrimValPattern : Constant -> Core String
+mlPrimValPattern (I x) = pure (show x)
+mlPrimValPattern (BI x) = pure (mlString (show x))
+mlPrimValPattern (B8 x) = pure (show x)
+mlPrimValPattern (B16 x) = pure (show x)
+mlPrimValPattern (B32 x) = pure (show x)
+mlPrimValPattern (B64 x) = pure (show x ++ "L")
+mlPrimValPattern (Str x) = pure (mlString x)
+mlPrimValPattern (Ch x) = pure (mlChar x)
+mlPrimValPattern (Db x) = pure (show x)
+mlPrimValPattern WorldVal = pure ("()")
 mlPrimValPattern val = throw . InternalError $ "Unsupported primitive in pattern: " ++ show val
 
 
-mlBlock : (tag : Int) -> (args : List MLExpr) -> MLExpr
+mlBlock : (tag : Int) -> (args : List String) -> String
 mlBlock tag args =
     let numArgs = length args
         block = "let block = Obj.new_block " ++ show tag ++ " " ++ show numArgs ++ " in "
         fieldSets = flap ([0..numArgs] `zip` args) \(i, arg) =>
-            "Obj.set_field block " ++ show i ++ " (Obj.repr " ++ arg.source ++ ");"
-        src = "(" ++ block ++ showSep " " fieldSets ++ "hint_opaque (Obj.obj block))"
-    in MkMLExpr src SOpaque
+            "Obj.set_field block " ++ show i ++ " " ++ arg ++ ";"
+    in "(" ++ block ++ showSep " " fieldSets ++ " block)"
 
 
-data ConMatchType = ConMatchTy | ConMatchCon
-
-conMatchType : (alts : List NamedConAlt) -> ConMatchType
-conMatchType (MkNConAlt _ Nothing _ _::_) = ConMatchTy
-conMatchType _ = ConMatchCon
+mlVar : AVar -> String
+mlVar (ALocal i) = mlVarname i
+mlVar ANull = mlRepr "()"
 
 mutual
-    ||| Generate code for an expression and cast it if needed
-    |||
-    ||| If a cast is not needed because the types already match then this
-    ||| function behaves the same as `mlExpr`
-    export
-    castedExpr : {auto di : DefInfos} ->
-                 {auto funArgs : NameMap SType } ->
-                 SType ->
-                 NamedCExp ->
-                 Core MLExpr
-    castedExpr ty expr = do
-        expr' <- mlExpr expr
-        case maybeCastFn expr'.type ty of
-            Nothing => pure expr'
-            Just fn => pure $ MkMLExpr (fnCall fn [expr'.source]) ty
 
     ||| Generate code for an expression
     export
-    mlExpr : {auto di : DefInfos} ->
-            {auto funArgs : NameMap SType } ->
-            NamedCExp -> Core MLExpr
-    mlExpr (NmLocal fc x) = do
-        let ty = fromMaybe SOpaque (lookup x funArgs)
-        let source = mlName x
-        pure $ MkMLExpr source ty
-    mlExpr (NmRef fc x) =
-        let source = fnCall "as_opaque" [mlName x]
-            type = SOpaque
-        in pure $ MkMLExpr source type
-    mlExpr (NmLam fc x expr) = do
-        expr' <- castedExpr SOpaque expr
-        -- functions values are always `SOpaque -> SOpaque`, so a cast is needed
-        let source = "(as_opaque (fun (" ++ mlName x ++ " : idr2_opaque) : idr2_opaque -> "
-                ++ expr'.source
-                ++ "))"
-            type = SOpaque
-        pure $ MkMLExpr source type
-    mlExpr (NmLet fc x rhs expr) = do
+    mlExpr : ANF -> Core String
+    mlExpr (AV fc var) = pure $ mlVar var
+    mlExpr (AAppName fc name []) = do
+        let src = fnCall "Lazy.force" [mlName name]
+        pure src
+    
+    mlExpr (AAppName fc name args) = do
+        let src = fnCall (mlName name) $ map mlVar args
+        pure src
+    
+    mlExpr (AUnderApp fc name missing args) = do
+        let src = fnCall (mlName name) $ map mlVar args
+        pure $ mlRepr src
+    
+    mlExpr (AApp fc closure arg) = do
+        let src = fnCall (fnCall "as_fun" [mlVar closure]) [mlVar arg]
+        pure src
+    
+    mlExpr (ALet fc var rhs expr) = do
         rhs' <- mlExpr rhs
-        -- insert the newly bound name into the type environment for `expr`
-        let funArgs' = insert x rhs'.type funArgs
-        expr' <- mlExpr {funArgs = funArgs'} expr
-        let source = "(let " ++ mlName x ++ " = " ++ rhs'.source ++ " in " ++ expr'.source ++ ")"
-        let type = expr'.type
-        pure $ MkMLExpr source type
-    mlExpr (NmApp fc (NmRef _ name) args) = do
-        -- function call with all arguments supplied
-        case lookup name di of
-            Just tyInfo => do
-                args' <- traverse (uncurry castedExpr) (tyInfo.argTypes `zip` args)
-                -- functions without any arguments still need a `()`
-                let args'' = if isNil args then [erased] else args'
-                let call = fnCall (mlName name) (map source args'')
-                pure $ MkMLExpr call tyInfo.restType
-
-            Nothing => throw $ InternalError ("Unsupported function " ++ show name)
-
-    mlExpr (NmApp fc base args) = do
-        -- function call for a function value, might not have all argument supplied
-        base' <- mlExpr base
-        args' <- traverse mlExpr args
-        -- can't call a function without arguments, needs at least `()`
-        let args'' = if isNil args then [erased] else args'
-
-        let src = fnCall "hint_opaque" [fnCall "as_fun" (base'.source :: map source args'')]
-            type = SOpaque
-        pure $ MkMLExpr src type
-
-    mlExpr (NmCon fc name Nothing args) = do
-        -- Constructors without a tag are type constructors
-        -- which are represented as blocks with the name and arguments
-        args' <- traverse mlExpr args
-        let nameField = MkMLExpr (mlString $ show name) SString
+        expr' <- mlExpr expr
+        let header = "let " ++ mlVarname var ++ " = " ++ rhs' ++ " in "
+        pure $ "(" ++ header ++ expr' ++ ")"
+    
+    mlExpr (ACon fc name Nothing args) = do
+        -- type constructor
+        let args' = map mlVar args
+        let nameField = mlRepr (mlString $ show name)
 
         pure $ mlBlock 0 $ nameField :: args'
-
-    mlExpr (NmCon fc name (Just tag) []) = do
-        let src = fnCall "as_opaque" [show tag]
-        pure $ MkMLExpr src SOpaque
-
-    mlExpr (NmCon fc name tag args) = do
-        args' <- traverse mlExpr args
-        let tag' = fromMaybe 0 tag
-            block = mlBlock tag' args'
-        pure $ MkMLExpr block.source SOpaque
-
-    mlExpr (NmOp fc fn args) = do
-        res <- mlPrimFn fn args
-        args' <- traverse (uncurry castedExpr) $ res.argTypes `zip` args
-        let src = res.printer (map source args')
-        pure $ MkMLExpr src res.retType
-
-    mlExpr (NmExtPrim fc name args) =
+    
+    mlExpr (ACon fc name (Just tag) args) = do
+        let args' = map mlVar args
+        
+        pure $ mlBlock tag args'
+    
+    mlExpr (AOp fc primFn args) = mlPrimFn primFn $ map mlVar args
+    
+    mlExpr (AExtPrim fc name args) = do
         case !(exPrim name args) of
             Just exp => pure exp
 
@@ -329,158 +192,104 @@ mutual
                 coreLift $ putStrLn $ "Unimplemented ExtPrim!"
                 coreLift $ putStrLn $ "ExtPrim: " ++ show name
                 coreLift $ putStrLn $ "   args: " ++ show args
-                pure erased
+                pure $ mlRepr "()"
 
-    mlExpr (NmForce fc expr) = do
-        expr' <- mlExpr expr
-        let src = fnCall "Lazy.force" [fnCall "as_lazy" [expr'.source]]
-        pure $ MkMLExpr src SOpaque
-    mlExpr (NmDelay fc expr) = do
-        expr' <- mlExpr expr
-        let src = fnCall "as_opaque" [fnCall "lazy" [expr'.source]]
-        pure $ MkMLExpr src SOpaque
-    mlExpr (NmConCase fc expr alts def) = do
-        -- TODO if all alts have the same type then the whole expression
-        -- can have the same type too.
-        --
-        -- Right now all `case` expressions are `SOpaque`.
-        let matchTy = conMatchType alts
-
+    mlExpr (AConCase fc var alts def) = do
+        let var' = mlVar var
+        let header = "match " ++ fnCall "get_tag" [var'] ++ " with "
+        
         def' <- the (Core String) $ case def of
-            Just e => do
-                e' <- castedExpr SOpaque e
-                pure $ " | _ -> " ++ e'.source
             Nothing => pure ""
-
-        expr' <- castedExpr SOpaque expr
+            Just e => do
+                e' <- mlExpr e
+                pure $ "| _ -> " ++ e'
+                
+        let (matchEx, pats, fieldOffset) = case alts of
+                (MkAConAlt name Nothing _ _)::_ =>
+                    let matchEx = fnCall "as_string" [fnCall "Obj.field" [var', "0"]] in
+                    let pats = flap alts \(MkAConAlt name _ _ _) => mlString (show name) in
+                    (matchEx, pats, the Nat 1)
+                _ =>
+                    let matchEx = fnCall "get_tag" [var'] in
+                    let pats = flap alts \(MkAConAlt _ tag _ _) => show $ fromMaybe 0 tag in
+                    (matchEx, pats, the Nat 0)
         
-        let matchVal = "let match_val' : Obj.t = Obj.repr " ++ expr'.source ++ " in "
-
-        let (matchExpr, pats, fieldOffset) = the (String, List String, Nat) $ case matchTy of
-                ConMatchTy =>
-                    let matchExpr = "(hint_string (Obj.obj (Obj.field match_val' 0)))" in
-                    let pats = flap alts \(MkNConAlt name _ _ _) => mlString (show name) in
-                    (matchExpr, pats, 1)
-                    
-                ConMatchCon =>
-                    let matchExpr = "(get_tag match_val')" in
-                    let pats = flap alts \(MkNConAlt _ tag _ _) => show (fromMaybe 0 tag) in
-                    (matchExpr, pats, 0)
+    
+        arms <- for (pats `zip` alts) \(pat, MkAConAlt name tag names e) => do
         
-        alts <- for (pats `zip` alts) \(pat, MkNConAlt name _ names armExpr) => do
             let numNames = length names
-            let binderInfo = case lookup name di of
-                    Just info => names `zip` info.argTypes
-                    Nothing => names `zip` (replicate numNames SOpaque)
 
-            let binders = flap ([0..numNames] `zip` binderInfo) \(i, name, ty) =>
-                        "let " ++ mlName name ++ " : " ++ ocamlTypeName ty
-                            ++ " = Obj.obj (Obj.field match_val' " ++ show (i + fieldOffset) ++ ") in "
+            let binders = flap ([0..numNames] `zip` names) \(i, name) =>
+                    "let " ++ mlVarname name ++ " : Obj.t = "
+                      ++ fnCall "Obj.field" [var', show (i + fieldOffset)] ++ " in "
 
-            let funArgs' = fromList binderInfo
-            armExpr' <- castedExpr {di=di} {funArgs = funArgs `mergeLeft` funArgs'} SOpaque armExpr
-
-            let src = "| " ++ pat ++ " -> " ++ concat binders ++ armExpr'.source
-
-            pure src
+            e' <- mlExpr e
+            
+            pure $ "| " ++ pat ++ " -> " ++ concat binders ++ "(" ++ e' ++ ")"
+    
+        pure $ "(" ++ header ++ showSep " " arms ++ def' ++ ")"
         
-        let src = "(" ++ matchVal ++ "(match " ++ matchExpr ++ " with " ++ showSep " " alts ++ def' ++ "))"
-
-        pure $ MkMLExpr src SOpaque
+    mlExpr (AConstCase fc var alts def) = do
+        let header = "match " ++ fnCall "Obj.obj" [mlVar var] ++ " with "
         
-        
-    mlExpr (NmConstCase fc expr alts def) = do
-        -- TODO if all alts have the same type then the whole expression
-        -- can have the same type too.
-        --
-        -- Right now all `case` expressions are `SOpaque`.
-        alts' <- traverse alt alts
         def' <- case def of
-            Just e => do
-                e' <- castedExpr SOpaque e
-                pure $ "| _ -> " ++ e'.source
-            Nothing => pure ""
-
-        let arms = map snd alts'
-            constTy = map fst alts'
-
-        -- Try to find the type of the expression by looking at the patterns
-        expr' <- case constTy of
-                    [] => castedExpr SOpaque expr
-                    (t::_) => castedExpr t expr
-
-        -- Integers are matched as Strings for now, so add a conversion
-        -- TODO make this a bit nicer
-        let matchExpr = if expr'.type == SInteger
-                            then fnCall "Z.to_string" [expr'.source]
-                            else expr'.source
-
-        let src = "(match " ++ matchExpr ++ " with " ++ showSep " " arms ++ def' ++ ")"
-        pure $ MkMLExpr src SOpaque
-        where
-            alt : {auto di : DefInfos} ->
-                {auto funArgs : NameMap SType } ->
-                NamedConstAlt ->
-                Core (SType, String)
-            alt (MkNConstAlt const expr) = do
-                (pat, ty) <- mlPrimValPattern const
-                expr' <- castedExpr {di=di} {funArgs=funArgs} SOpaque expr
-                let src = "| " ++ pat ++ " -> " ++ expr'.source
-                pure $ (ty, src)
-
-    mlExpr (NmPrimVal fc val) = mlPrimVal val
-    mlExpr (NmErased fc) = pure erased
-    mlExpr (NmCrash fc x) =
-        let source = fnCall "raise" [fnCall "Idris2_Exception" [mlString $ show x]]
-            type = SOpaque
-        in pure $ MkMLExpr source type
+                    Nothing => pure ""
+                    Just e => do
+                        e' <- mlExpr e
+                        pure $ "| _ -> " ++ e'
+        
+        arms <- for alts \(MkAConstAlt c exp) => do
+            pat <- mlPrimValPattern c
+            exp' <- mlExpr exp
+            pure $ "| " ++ pat ++ " -> (" ++ exp' ++ ")"
+        
+        pure $ "(" ++ header ++ showSep " " arms ++ def' ++ ")"
+    
+    mlExpr (APrimVal fc constant) = mlPrimVal constant
+    mlExpr (AErased fc) = pure $ mlRepr "()"
+    mlExpr (ACrash fc msg) = pure $ "(raise (Idris2_Exception " ++ mlString msg ++ "))"
+    
+    
 
     ||| Generate code for external functions
-    exPrim : {auto di : DefInfos} ->
-             {auto funArgs : NameMap SType } ->
-             Name ->
-             List NamedCExp ->
-             Core (Maybe MLExpr)
+    exPrim : Name ->
+             List AVar ->
+             Core (Maybe String)
     exPrim name args =
         case (show name, args) of
-            ("System.Info.prim__codegen", []) => pure . Just $ MkMLExpr (mlString "ocaml") SString
+            ("System.Info.prim__codegen", []) => pure . Just $ mlString "ocaml"
             ("System.Info.prim__os", []) => do
-                pure . Just $ MkMLExpr "(OcamlRts.System.os_name (Obj.magic ()))" SString
+                let call = fnCall "OcamlRts.System.os_name" ["Obj.magic ()"]
+                pure . Just $ mlRepr call
 
             -- IORef
             ("Data.IORef.prim__newIORef", [_, val, world]) => do
-                val' <- castedExpr SOpaque val
-                let src = "(as_opaque (ref " ++ val'.source ++ "))"
-                pure . Just $ MkMLExpr src SOpaque
+                pure . Just . mlRepr $ fnCall "ref" [mlVar val]
+                
             ("Data.IORef.prim__writeIORef", [_, ref, val, world]) => do
-                ref' <- castedExpr SOpaque ref
-                val' <- castedExpr SOpaque val
-                let src = "((as_ref (" ++ ref'.source ++ ")) := " ++ val'.source ++ "; as_opaque ())"
-                pure . Just $ MkMLExpr src SOpaque
+                let ref' = fnCall "as_ref" [mlVar ref]
+                let src = "(" ++ ref' ++ " := " ++ mlVar val ++ "; Obj.repr ())";
+                pure $ Just src
+                
             ("Data.IORef.prim__readIORef", [_, ref, world]) => do
-                ref' <- castedExpr SOpaque ref
-                let src = "(as_opaque (!(as_ref " ++ ref'.source ++ ")))"
-                pure . Just $ MkMLExpr src SOpaque
+                let ref' = fnCall "as_ref" [mlVar ref]
+                let src = mlRepr $ "(!" ++ ref' ++ ")"
+                pure $ Just src
 
             -- IOArray
             ("Data.IOArray.Prims.prim__newArray", [_, len, val, world]) => do
-                len' <- castedExpr SInt len
-                val' <- castedExpr SOpaque val
-                let src = "(as_opaque (Array.make " ++ len'.source ++ " " ++ val'.source ++ "))"
-                pure . Just $ MkMLExpr src SOpaque
+                let src = fnCall "Array.make" [asInt $ mlVar len, mlVar val]
+                pure . Just . mlRepr $ src
+            
             ("Data.IOArray.Prims.prim__arraySet", [_, arr, idx, val, world]) => do
-                arr' <- castedExpr SOpaque arr
-                idx' <- castedExpr SInt idx
-                val' <- castedExpr SOpaque val
-                let src = "(Array.set (as_array " ++ arr'.source ++ ") " ++ idx'.source ++ " " ++ val'.source ++ "; as_opaque ())"
-                pure . Just $ MkMLExpr src SOpaque
+                let call = fnCall "Array.set" [fnCall "as_array" [mlVar arr], asInt $ mlVar idx, mlVar val]
+                pure . Just $ "(" ++ call ++ "; Obj.repr ())"
+                
             ("Data.IOArray.Prims.prim__arrayGet", [_, arr, idx, world]) => do
-                arr' <- castedExpr SOpaque arr
-                idx' <- castedExpr SInt idx
-                let src = "(as_opaque (Array.get (as_array " ++ arr'.source ++ ") " ++ idx'.source ++ "))"
-                pure . Just $ MkMLExpr src SOpaque
+                let call = fnCall "Array.get" [fnCall "as_array" [mlVar arr], asInt $ mlVar idx]
+                pure . Just . mlRepr $ call
 
             ("Prelude.Uninhabited.void", [_, _]) => do
-                pure . Just $ MkMLExpr "(as_opaque ())" SOpaque
+                pure . Just . mlRepr $ "()"
 
             _ => pure Nothing

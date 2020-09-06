@@ -4,6 +4,8 @@ import Idris.Driver
 
 import Compiler.Common
 import Compiler.CompileExpr
+import Compiler.ANF
+import Compiler.LambdaLift
 
 import Core.Context
 import Core.Directory
@@ -25,7 +27,6 @@ import System.Info
 
 
 import Ocaml.Expr
-import Ocaml.DefInfo
 import Ocaml.Foreign
 import Ocaml.Utils
 import Ocaml.Modules
@@ -33,57 +34,112 @@ import Ocaml.CompileCommands
 
 
 ||| Generate OCaml code for a "definition" (function, constructor, foreign func, etc)
-mlDef : {auto di : DefInfos} ->
-        Name ->
-        NamedDef ->
+mlDef : Name ->
+        ANFDef ->
         Core String
-mlDef name (MkNmFun args expr) = do
-    Just info <- pure $ lookup name di
-        | Nothing => throw $ InternalError $ "No Extracted type for function " ++ show name
+mlDef name (MkAFun [] expr) = do
+    let header = mlName name ++ " : Obj.t lazy_t = lazy ("
+    code <- mlExpr expr
+    pure $ header ++ code ++ ")\n\n"
+    
+mlDef name (MkAFun args expr) = do
 
-    let args' = args `zip` info.argTypes
-        ret = info.restType
+    let argDecls = showSep " " $ map (\n => "(" ++ mlVarname n ++ " : Obj.t)") args
+        header = mlName name ++ " " ++ argDecls ++ " : Obj.t = "
 
+    code <- mlExpr expr
+    pure $ header ++ code ++ "\n\n"
 
-    let argDecls = showSep " " $ map (\(n, ty) => "(" ++ mlName n ++ " : " ++ ocamlTypeName ty ++ ")") args'
-        argDecls' = if isNil args' then "()" else argDecls -- functions without arguments have weird limitations
-        header = mlName name ++ " " ++ argDecls' ++ " : " ++ ocamlTypeName ret ++ " = "
+mlDef name (MkACon tag arity) = pure ""
+mlDef name (MkAForeign ccs [] retTy) = do
+    let header = mlName name ++ " () : Obj.t = "
+    let callArgs = ["(Obj.magic ())"]
+    let fun = foreignFun name ccs [] retTy
+    let call = fun ++ " " ++ showSep " " callArgs
+    
+    pure $ header ++ "(Obj.magic (" ++ call ++ "))\n\n"
+    
+mlDef name (MkAForeign ccs argTys retTy) = do
 
-    code <- castedExpr {funArgs = fromList args'} ret expr
-    pure $ header ++ code.source ++ "\n\n"
+    let args = flap ([1..(length argTys)] `zip` argTys) \(i, t) =>
+            let isWorld = case t of
+                            CFWorld => True
+                            _ => False
+                name = "arg_" ++ show i
+            in (name, isWorld)
+    
+    let nonWorldArgs' = filter (\(_, isWorld) => not isWorld) args
+    let nonWorldArgs = if isNil nonWorldArgs' then [("()", False)] else nonWorldArgs'
+    
+    let argDecls = showSep " " $ map (\(n,_) => "(" ++ n ++ " : Obj.t)") args
+    let header = mlName name ++ " " ++ argDecls ++ " : Obj.t = "
+    
+    let callArgs = flap nonWorldArgs \(n,_) => "(Obj.magic " ++ n ++ ")"
+    let fun = foreignFun name ccs argTys retTy
+    let call = fun ++ " " ++ showSep " " callArgs
+    
+    pure $ header ++ "(Obj.magic (" ++ call ++ "))\n\n"
 
-mlDef name (MkNmCon tag arity nt) = pure ""
-mlDef name (MkNmForeign ccs argTys retTy) = do
-    let argTys' = map fromCFType argTys
-        retTy' = fromCFType retTy
-        argNames = map (("arg_" ++) . show) [1..(length argTys')]
-        args = argNames `zip` argTys'
-        argDecls = showSep " " $ map (\(name, ty) => "(" ++ name ++ " : " ++ ocamlTypeName ty ++ ")") args
-        args' = if isNil args then "()" else argDecls
-    let header = mlName name ++ " " ++ args' ++ " : " ++ ocamlTypeName retTy' ++ " = "
-        callArgs = filter (\(_, ty) => ty /= SWorld) args
-
-        callArgs' = if isNil callArgs then ["(Obj.magic ())"] else map (\(n, _) => "(Obj.magic (" ++ n ++ "))") callArgs
-
-        body = "(Obj.magic (" ++ foreignFun name ccs argTys retTy ++ " " ++ showSep " " callArgs' ++ "))"
-
+mlDef name (MkAError msg) = do
+    let header = mlName name ++ " () : Obj.t = "
+    body <- mlExpr msg
     pure $ header ++ body ++ "\n\n"
 
-mlDef name (MkNmError msg) = do
-    let header = mlName name ++ " () : idr2_opaque = "
-    body <- castedExpr {funArgs = NameMap.empty} SOpaque msg
-    pure $ header ++ body.source ++ "\n\n"
 
-||| Generate OCaml code for the main expression
-mainModule : {auto di : DefInfos} -> (deps : List String) -> NamedCExp -> Core String
-mainModule deps expr = do
-    code <- mlExpr {funArgs = NameMap.empty} expr
 
-    let imports = "open OcamlRts;;\n\n" ++ (concatMap (\s => "open " ++ s ++ ";;\n") deps)
-        body = code.source ++ ";;"
+mainToANF : Name -> CExp [] -> Core (List (Name, ANFDef))
+mainToANF name exp = do
+    (lexp, defs) <- liftBody name exp
+    
+    let mainDef = (name, MkLFun [] [] lexp)
+    
+    anfs <- for (mainDef :: defs) \(name, ldef) => do
+        adef <- toANF ldef
+        pure (name, adef)
+    
+    pure anfs
 
-    pure $ imports ++ body
+writeModule : (path : String) -> (mod : Module) -> Core ()
+writeModule path mod = do
+    
+    Right mlFile <- coreLift $ openFile path WriteTruncate
+        | Left err => throw (FileErr path err)
+        
+    let append = \strData => Core.Core.do
+            Right () <- coreLift $ fPutStr mlFile strData
+                | Left err => throw (FileErr path err)
+            coreLift $ fflush mlFile
 
+    let imports = concatMap (++";;\n") $ map ("open "++) (SortedSet.toList mod.deps)
+    
+    append $ "open OcamlRts;;\n\n" ++
+            imports ++ "\nlet rec "
+    
+    first <- coreLift $ newIORef True
+    defsWritten <- coreLift $ newIORef (the Int 0)
+    for_ mod.defs \(n, d) => do
+        def <- mlDef n d
+        if def == ""
+            then pure ()
+            else do
+                isFirst <- coreLift $ readIORef first
+                if isFirst
+                    then coreLift $ writeIORef first False
+                    else append "and "
+                append def
+                coreLift $ modifyIORef defsWritten (+1)
+    
+    append ";;"
+
+    coreLift $ closeFile mlFile
+    
+    if !(coreLift $ readIORef defsWritten) == 0
+        then do
+            _ <- coreLift $ writeFile path ""
+            pure ()
+        else pure ()
+
+    pure ()
 
 
 ||| OCaml implementation of the `compileExpr` interface.
@@ -103,75 +159,49 @@ compileExpr comp c tmpDir outputDir tm outfile = do
 
     let ext = if isWindows then ".exe" else ""
     let outFile = cwd </> outputDir </> outfile <.> ext
+    
+    let modRelFileName = \ns,ext => appDirRel </> ns <.> ext
+    let modAbsFileName = \ns,ext => cwd </> outputDir </> modRelFileName ns ext
+    
 
     cData <- getCompileData Cases tm
-    let ndefs = namedDefs cData
+    let adefs = anf cData
     let ctm = forget (mainExpr cData)
+    
+    let mainFuncName = UN "main"
+    mainDefs <- mainToANF mainFuncName (mainExpr cData)
 
     ctxtDefs <- get Ctxt
     let context = gamma ctxtDefs
-        modRelFileName = \ns,ext => appDirRel </> ns <.> ext
-        modAbsFileName = \ns,ext => cwd </> outputDir </> modRelFileName ns ext
 
-    diMap <- buildDefInfoMap ndefs
-
-    let mods = modules ndefs
+    let mods = modules adefs
 
     modules <- for (moduleDefs mods) $ \mod => do
-        
         let modName = mod.name
         let path = modAbsFileName modName "ml"
-        
-        Right mlFile <- coreLift $ openFile path WriteTruncate
-            | Left err => throw (FileErr path err)
-            
-        let append = \strData => Core.Core.do
-                Right () <- coreLift $ fPutStr mlFile strData
-                    | Left err => throw (FileErr path err)
-                coreLift $ fflush mlFile
-    
-        let imports = concatMap (++";;\n") $ map ("open "++) (SortedSet.toList mod.deps)
-        
-        append $ "open OcamlRts;;\n\n" ++
-                imports ++ "\nlet rec "
-        
-        first <- coreLift $ newIORef True
-        defsWritten <- coreLift $ newIORef (the Int 0)
-        for_ mod.defs \(n,_,d) => do
-            def <- mlDef n d
-            if def == ""
-                then pure ()
-                else do
-                    isFirst <- coreLift $ readIORef first
-                    if isFirst
-                        then coreLift $ writeIORef first False
-                        else append "and "
-                    append def
-                    coreLift $ modifyIORef defsWritten (+1)
-        
-        append ";;"
-        coreLift $ closeFile mlFile
-        
-        if !(coreLift $ readIORef defsWritten) == 0
-            then do
-                _ <- coreLift $ writeFile path ""
-                pure ()
-            else pure ()
-
+        writeModule path mod
         pure modName
 
-    let mainImports =
-            let raw = StringMap.keys mods.defsByNamespace
-                resolved = SortedSet.fromList . flip map raw $ \n =>
-                    fromMaybe n $ StringMap.lookup n mods.namespaceMapping
-            in SortedSet.toList resolved
-
-    mainMod <- mainModule mainImports ctm
-    let mainPathML = cwd </> outputDir </> appDirRel </> "Main.ml"
-    let mainPathCMX = cwd </> outputDir </> appDirRel </> "Main.cmx"
-
-    Right () <- coreLift $ writeFile mainPathML mainMod
-            | Left err => throw $ FileErr mainPathML err
+    -- deal with Main function
+    do
+        -- main takes ALL modules as dependencies
+        let mainImports = flap (StringMap.keys mods.defsByNamespace) $ \n =>
+                fromMaybe n $ StringMap.lookup n mods.namespaceMapping
+        
+        let mainMLPath = modAbsFileName "Main" "ml"
+        let mainModule = MkModule "Main" mainDefs (SortedSet.fromList mainImports)
+        writeModule mainMLPath mainModule
+    
+        -- still needs the actual call to the main function Main.main
+        let mainCallSrc = "\n\nLazy.force (" ++ mlName mainFuncName ++ ");;\n\n"
+        
+        Right mainMLFile <- coreLift $ openFile mainMLPath Append
+            | Left err => throw (FileErr mainMLPath err)
+            
+        Right () <- coreLift $ fPutStr mainMLFile mainCallSrc
+            | Left err => throw (FileErr mainMLPath err)
+        
+        coreLift $ closeFile mainMLFile
 
 
     -- TMP HACK
