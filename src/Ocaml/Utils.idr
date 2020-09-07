@@ -32,14 +32,17 @@ for_ (x::xs) f = do
     () <- f x
     for_ xs f
 
+export
+parens : String -> String
+parens s = "(" ++ s ++ ")"
 
 export
 binOp : (op : String) -> (a, b : String) -> String
-binOp op a b = "(" ++ a ++ " " ++ op ++ " " ++ b ++ ")"
+binOp op a b = parens $ a ++ " " ++ op ++ " " ++ b
 
 export
 fnCall : (fn : String) -> (args : List String) -> String
-fnCall fn args = "(" ++ fn ++ " " ++ showSep " " args ++ ")"
+fnCall fn args = parens $ fn ++ " " ++ showSep " " args
 
 export
 boolOp : (op : String) -> (a, b : String) -> String
@@ -50,14 +53,12 @@ mlRepr : String -> String
 mlRepr s = fnCall "Obj.repr" [s]
 
 
+
+
 export
 namespace' : Name -> String
 namespace' (NS ns _) = "Mod_" ++ showSep "_" (reverse ns)
 namespace' _ = "Misc"
-
-export
-mlVarname : Int -> String
-mlVarname i = "var_" ++ show i
 
 
 public export

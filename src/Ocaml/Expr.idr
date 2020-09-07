@@ -6,7 +6,6 @@
 ||| only insert the casts that are necessary.
 module Ocaml.Expr
 
-import Compiler.ANF
 import Compiler.Common
 import Compiler.CompileExpr
 
@@ -138,54 +137,60 @@ mlBlock tag args =
     in "(" ++ block ++ showSep " " fieldSets ++ " block)"
 
 
-mlVar : AVar -> String
-mlVar (ALocal i) = mlVarname i
-mlVar ANull = mlRepr "()"
-
 mutual
 
     ||| Generate code for an expression
     export
-    mlExpr : ANF -> Core String
-    mlExpr (AV fc var) = pure $ mlVar var
-    mlExpr (AAppName fc name []) = do
-        let src = fnCall "Lazy.force" [mlName name]
-        pure src
-    
-    mlExpr (AAppName fc name args) = do
-        let src = fnCall (mlName name) $ map mlVar args
-        pure src
-    
-    mlExpr (AUnderApp fc name missing args) = do
-        let src = fnCall (mlName name) $ map mlVar args
-        pure $ mlRepr src
-    
-    mlExpr (AApp fc closure arg) = do
-        let src = fnCall (fnCall "as_fun" [mlVar closure]) [mlVar arg]
-        pure src
-    
-    mlExpr (ALet fc var rhs expr) = do
+    mlExpr : NamedCExp -> Core String
+    mlExpr (NmLocal fc name) = pure $ mlName name
+    mlExpr (NmRef fc name) = pure $ mlName name
+    mlExpr (NmLam fc name rhs) = do
+        let name' = mlName name
+        rhs' <- mlExpr rhs
+        
+        pure . mlRepr . parens $ "fun (" ++ name' ++ " : Obj.t) : Obj.t -> " ++ rhs'
+
+    mlExpr (NmLet fc name rhs expr) = do
         rhs' <- mlExpr rhs
         expr' <- mlExpr expr
-        let header = "let " ++ mlVarname var ++ " = " ++ rhs' ++ " in "
-        pure $ "(" ++ header ++ expr' ++ ")"
-    
-    mlExpr (ACon fc name Nothing args) = do
-        -- type constructor
-        let args' = map mlVar args
-        let nameField = mlRepr (mlString $ show name)
-
-        pure $ mlBlock 0 $ nameField :: args'
-    
-    mlExpr (ACon fc name (Just tag) args) = do
-        let args' = map mlVar args
         
+        let header = "let " ++ mlName name ++ " : Obj.t = " ++ rhs' ++ " in "
+        let src = header ++ expr'
+        pure $ parens src
+    
+    mlExpr (NmApp fc (NmRef _ name) []) = pure $ fnCall "Lazy.force" [mlName name]
+    mlExpr (NmApp fc (NmRef _ name) args) = do
+        args' <- traverse mlExpr args
+        pure $ fnCall (mlName name) args'
+    
+    mlExpr (NmApp fc base []) = do
+        base' <- mlExpr base
+        pure $ fnCall "Lazy.force" [fnCall "as_lazy" [base']]
+        
+    mlExpr (NmApp fc base args) = do
+        base' <- mlExpr base
+        args' <- traverse mlExpr args
+        let call = fnCall (fnCall "Obj.magic" [base']) args'
+        pure $ call
+    
+    mlExpr (NmCon fc name Nothing args) = do
+        let name' = mlRepr . mlString $ show name
+        args' <- traverse mlExpr args
+        
+        pure $ mlBlock 0 (name' :: args')
+        
+    mlExpr (NmCon fc name (Just tag) []) = pure . mlRepr $ show tag
+    mlExpr (NmCon fc name (Just tag) args) = do
+        args' <- traverse mlExpr args
         pure $ mlBlock tag args'
     
-    mlExpr (AOp fc primFn args) = mlPrimFn primFn $ map mlVar args
+    mlExpr (NmOp fc fn args) = do
+        args' <- traverse mlExpr args
+        mlPrimFn fn args'
     
-    mlExpr (AExtPrim fc name args) = do
-        case !(exPrim name args) of
+    mlExpr (NmExtPrim fc name args) = do
+        args' <- traverse mlExpr args
+        case !(exPrim name args') of
             Just exp => pure exp
 
             Nothing => do
@@ -193,10 +198,19 @@ mutual
                 coreLift $ putStrLn $ "ExtPrim: " ++ show name
                 coreLift $ putStrLn $ "   args: " ++ show args
                 pure $ mlRepr "()"
-
-    mlExpr (AConCase fc var alts def) = do
-        let var' = mlVar var
-        let header = "match " ++ fnCall "get_tag" [var'] ++ " with "
+    
+    mlExpr (NmForce fc expr) = do
+        expr' <- mlExpr expr
+        pure $ fnCall "Lazy.force" [fnCall "as_lazy" [expr']]
+    
+    mlExpr (NmDelay fc expr) = do
+        expr' <- mlExpr expr
+        pure . mlRepr $ fnCall "lazy" [expr']
+    
+    mlExpr (NmConCase fc expr alts def) = do
+        
+        expr' <- mlExpr expr
+        let matchVal = "let match_val' : Obj.t = " ++ expr' ++ " in "
         
         def' <- the (Core String) $ case def of
             Nothing => pure ""
@@ -205,32 +219,33 @@ mutual
                 pure $ "| _ -> " ++ e'
                 
         let (matchEx, pats, fieldOffset) = case alts of
-                (MkAConAlt name Nothing _ _)::_ =>
-                    let matchEx = fnCall "as_string" [fnCall "Obj.field" [var', "0"]] in
-                    let pats = flap alts \(MkAConAlt name _ _ _) => mlString (show name) in
+                (MkNConAlt name Nothing _ _)::_ =>
+                    let matchEx = fnCall "as_string" [fnCall "Obj.field" ["match_val'", "0"]] in
+                    let pats = flap alts \(MkNConAlt name _ _ _) => mlString (show name) in
                     (matchEx, pats, the Nat 1)
                 _ =>
-                    let matchEx = fnCall "get_tag" [var'] in
-                    let pats = flap alts \(MkAConAlt _ tag _ _) => show $ fromMaybe 0 tag in
+                    let matchEx = fnCall "get_tag" ["match_val'"] in
+                    let pats = flap alts \(MkNConAlt _ tag _ _) => show $ fromMaybe 0 tag in
                     (matchEx, pats, the Nat 0)
         
-    
-        arms <- for (pats `zip` alts) \(pat, MkAConAlt name tag names e) => do
+        let header = "match " ++ matchEx ++ " with "
+        
+        arms <- for (pats `zip` alts) \(pat, MkNConAlt name tag names e) => do
         
             let numNames = length names
 
             let binders = flap ([0..numNames] `zip` names) \(i, name) =>
-                    "let " ++ mlVarname name ++ " : Obj.t = "
-                      ++ fnCall "Obj.field" [var', show (i + fieldOffset)] ++ " in "
+                    "let " ++ mlName name ++ " : Obj.t = "
+                      ++ fnCall "Obj.field" ["match_val'", show (i + fieldOffset)] ++ " in "
 
             e' <- mlExpr e
             
-            pure $ "| " ++ pat ++ " -> " ++ concat binders ++ "(" ++ e' ++ ")"
-    
-        pure $ "(" ++ header ++ showSep " " arms ++ def' ++ ")"
+            pure $ "| " ++ pat ++ " -> " ++ concat binders ++ parens e'
         
-    mlExpr (AConstCase fc var alts def) = do
-        let header = "match " ++ fnCall "Obj.obj" [mlVar var] ++ " with "
+        pure . parens $ matchVal ++ header ++ showSep " " arms ++ def'
+    
+    mlExpr (NmConstCase fc expr alts def) = do
+        let header = "match " ++ fnCall "Obj.obj" [!(mlExpr expr)] ++ " with "
         
         def' <- case def of
                     Nothing => pure ""
@@ -238,22 +253,21 @@ mutual
                         e' <- mlExpr e
                         pure $ "| _ -> " ++ e'
         
-        arms <- for alts \(MkAConstAlt c exp) => do
+        arms <- for alts \(MkNConstAlt c exp) => do
             pat <- mlPrimValPattern c
             exp' <- mlExpr exp
             pure $ "| " ++ pat ++ " -> (" ++ exp' ++ ")"
         
         pure $ "(" ++ header ++ showSep " " arms ++ def' ++ ")"
     
-    mlExpr (APrimVal fc constant) = mlPrimVal constant
-    mlExpr (AErased fc) = pure $ mlRepr "()"
-    mlExpr (ACrash fc msg) = pure $ "(raise (Idris2_Exception " ++ mlString msg ++ "))"
-    
-    
+    mlExpr (NmPrimVal fc const) = mlPrimVal const
+    mlExpr (NmErased fc) = pure $ mlRepr "()"
+    mlExpr (NmCrash fc msg) =
+        pure $ fnCall "raise" [fnCall "Idris2_Exception" [mlString msg]]
 
     ||| Generate code for external functions
     exPrim : Name ->
-             List AVar ->
+             List String ->
              Core (Maybe String)
     exPrim name args =
         case (show name, args) of
@@ -264,29 +278,29 @@ mutual
 
             -- IORef
             ("Data.IORef.prim__newIORef", [_, val, world]) => do
-                pure . Just . mlRepr $ fnCall "ref" [mlVar val]
+                pure . Just . mlRepr $ fnCall "ref" [val]
                 
             ("Data.IORef.prim__writeIORef", [_, ref, val, world]) => do
-                let ref' = fnCall "as_ref" [mlVar ref]
-                let src = "(" ++ ref' ++ " := " ++ mlVar val ++ "; Obj.repr ())";
+                let ref' = fnCall "as_ref" [ref]
+                let src = "(" ++ ref' ++ " := " ++ val ++ "; Obj.repr ())";
                 pure $ Just src
                 
             ("Data.IORef.prim__readIORef", [_, ref, world]) => do
-                let ref' = fnCall "as_ref" [mlVar ref]
+                let ref' = fnCall "as_ref" [ref]
                 let src = mlRepr $ "(!" ++ ref' ++ ")"
                 pure $ Just src
 
             -- IOArray
             ("Data.IOArray.Prims.prim__newArray", [_, len, val, world]) => do
-                let src = fnCall "Array.make" [asInt $ mlVar len, mlVar val]
+                let src = fnCall "Array.make" [asInt len, val]
                 pure . Just . mlRepr $ src
             
             ("Data.IOArray.Prims.prim__arraySet", [_, arr, idx, val, world]) => do
-                let call = fnCall "Array.set" [fnCall "as_array" [mlVar arr], asInt $ mlVar idx, mlVar val]
+                let call = fnCall "Array.set" [fnCall "as_array" [arr], asInt idx, val]
                 pure . Just $ "(" ++ call ++ "; Obj.repr ())"
                 
             ("Data.IOArray.Prims.prim__arrayGet", [_, arr, idx, world]) => do
-                let call = fnCall "Array.get" [fnCall "as_array" [mlVar arr], asInt $ mlVar idx]
+                let call = fnCall "Array.get" [fnCall "as_array" [arr], asInt idx]
                 pure . Just . mlRepr $ call
 
             ("Prelude.Uninhabited.void", [_, _]) => do

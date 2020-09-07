@@ -19,6 +19,8 @@ let as_char : Obj.t -> idr2_char = Obj.obj;;
 let as_double : Obj.t -> float = Obj.obj;;
 let as_world (x : Obj.t) : unit = ();;
 
+let hint_obj_t (x : Obj.t) : Obj.t = x;;
+
 
 (* Primitive functions *)
 

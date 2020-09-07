@@ -35,23 +35,23 @@ import Ocaml.CompileCommands
 
 ||| Generate OCaml code for a "definition" (function, constructor, foreign func, etc)
 mlDef : Name ->
-        ANFDef ->
+        NamedDef ->
         Core String
-mlDef name (MkAFun [] expr) = do
+mlDef name (MkNmFun [] expr) = do
     let header = mlName name ++ " : Obj.t lazy_t = lazy ("
     code <- mlExpr expr
     pure $ header ++ code ++ ")\n\n"
     
-mlDef name (MkAFun args expr) = do
+mlDef name (MkNmFun args expr) = do
 
-    let argDecls = showSep " " $ map (\n => "(" ++ mlVarname n ++ " : Obj.t)") args
+    let argDecls = showSep " " $ map (\n => "(" ++ mlName n ++ " : Obj.t)") args
         header = mlName name ++ " " ++ argDecls ++ " : Obj.t = "
 
     code <- mlExpr expr
     pure $ header ++ code ++ "\n\n"
 
-mlDef name (MkACon tag arity) = pure ""
-mlDef name (MkAForeign ccs [] retTy) = do
+mlDef name (MkNmCon _ _ _) = pure ""
+mlDef name (MkNmForeign ccs [] retTy) = do
     let header = mlName name ++ " () : Obj.t = "
     let callArgs = ["(Obj.magic ())"]
     let fun = foreignFun name ccs [] retTy
@@ -59,14 +59,13 @@ mlDef name (MkAForeign ccs [] retTy) = do
     
     pure $ header ++ "(Obj.magic (" ++ call ++ "))\n\n"
     
-mlDef name (MkAForeign ccs argTys retTy) = do
+mlDef name (MkNmForeign ccs argTys retTy) = do
 
     let args = flap ([1..(length argTys)] `zip` argTys) \(i, t) =>
             let isWorld = case t of
                             CFWorld => True
                             _ => False
-                name = "arg_" ++ show i
-            in (name, isWorld)
+            in ("arg_" ++ show i, isWorld)
     
     let nonWorldArgs' = filter (\(_, isWorld) => not isWorld) args
     let nonWorldArgs = if isNil nonWorldArgs' then [("()", False)] else nonWorldArgs'
@@ -80,13 +79,13 @@ mlDef name (MkAForeign ccs argTys retTy) = do
     
     pure $ header ++ "(Obj.magic (" ++ call ++ "))\n\n"
 
-mlDef name (MkAError msg) = do
+mlDef name (MkNmError msg) = do
     let header = mlName name ++ " () : Obj.t = "
     body <- mlExpr msg
     pure $ header ++ body ++ "\n\n"
 
 
-
+{-
 mainToANF : Name -> CExp [] -> Core (List (Name, ANFDef))
 mainToANF name exp = do
     (lexp, defs) <- liftBody name exp
@@ -98,6 +97,7 @@ mainToANF name exp = do
         pure (name, adef)
     
     pure anfs
+-}
 
 writeModule : (path : String) -> (mod : Module) -> Core ()
 writeModule path mod = do
@@ -163,18 +163,14 @@ compileExpr comp c tmpDir outputDir tm outfile = do
     let modRelFileName = \ns,ext => appDirRel </> ns <.> ext
     let modAbsFileName = \ns,ext => cwd </> outputDir </> modRelFileName ns ext
     
-
     cData <- getCompileData Cases tm
-    let adefs = anf cData
-    let ctm = forget (mainExpr cData)
-    
-    let mainFuncName = UN "main"
-    mainDefs <- mainToANF mainFuncName (mainExpr cData)
+    let ndefs = flap (namedDefs cData) \(name, _, def) => (name, def)
+    let mainExpr = forget (mainExpr cData)
 
     ctxtDefs <- get Ctxt
     let context = gamma ctxtDefs
 
-    let mods = modules adefs
+    let mods = modules ndefs
 
     modules <- for (moduleDefs mods) $ \mod => do
         let modName = mod.name
@@ -187,22 +183,24 @@ compileExpr comp c tmpDir outputDir tm outfile = do
         -- main takes ALL modules as dependencies
         let mainImports = flap (StringMap.keys mods.defsByNamespace) $ \n =>
                 fromMaybe n $ StringMap.lookup n mods.namespaceMapping
-        
+                
+        let mainFnName = UN "main"
+        let mainDefs = [(mainFnName, MkNmFun [] mainExpr)]
         let mainMLPath = modAbsFileName "Main" "ml"
         let mainModule = MkModule "Main" mainDefs (SortedSet.fromList mainImports)
+        
         writeModule mainMLPath mainModule
-    
+        
         -- still needs the actual call to the main function Main.main
-        let mainCallSrc = "\n\nLazy.force (" ++ mlName mainFuncName ++ ");;\n\n"
+        let mainCallSrc = "\n\nLazy.force (" ++ mlName mainFnName ++ ");;\n\n"
         
         Right mainMLFile <- coreLift $ openFile mainMLPath Append
             | Left err => throw (FileErr mainMLPath err)
             
         Right () <- coreLift $ fPutStr mainMLFile mainCallSrc
             | Left err => throw (FileErr mainMLPath err)
-        
+            
         coreLift $ closeFile mainMLFile
-
 
     -- TMP HACK
     -- .a and .h files
