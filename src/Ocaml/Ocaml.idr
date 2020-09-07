@@ -4,8 +4,6 @@ import Idris.Driver
 
 import Compiler.Common
 import Compiler.CompileExpr
-import Compiler.ANF
-import Compiler.LambdaLift
 
 import Core.Context
 import Core.Directory
@@ -83,21 +81,6 @@ mlDef name (MkNmError msg) = do
     let header = mlName name ++ " () : Obj.t = "
     body <- mlExpr msg
     pure $ header ++ body ++ "\n\n"
-
-
-{-
-mainToANF : Name -> CExp [] -> Core (List (Name, ANFDef))
-mainToANF name exp = do
-    (lexp, defs) <- liftBody name exp
-    
-    let mainDef = (name, MkLFun [] [] lexp)
-    
-    anfs <- for (mainDef :: defs) \(name, ldef) => do
-        adef <- toANF ldef
-        pure (name, adef)
-    
-    pure anfs
--}
 
 writeModule : (path : String) -> (mod : Module) -> Core ()
 writeModule path mod = do

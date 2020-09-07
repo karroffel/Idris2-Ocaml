@@ -1,6 +1,5 @@
 module Ocaml.Modules
 
-import Compiler.ANF
 import Compiler.Common
 import Compiler.CompileExpr
 
