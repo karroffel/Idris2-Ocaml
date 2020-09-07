@@ -259,7 +259,7 @@ mutual
         case (show name, args) of
             ("System.Info.prim__codegen", []) => pure . Just $ mlString "ocaml"
             ("System.Info.prim__os", []) => do
-                let call = fnCall "OcamlRts.System.os_name" ["Obj.magic ()"]
+                let call = fnCall "OcamlRts.System.os_name" ["(Obj.magic ())"]
                 pure . Just $ mlRepr call
 
             -- IORef
