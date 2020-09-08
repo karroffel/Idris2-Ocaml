@@ -149,9 +149,20 @@ compileExpr comp c tmpDir outputDir tm outfile = do
     cData <- getCompileData Cases tm
     let ndefs = flap (namedDefs cData) \(name, _, def) => (name, def)
     let mainExpr = forget (mainExpr cData)
+    
+
 
     ctxtDefs <- get Ctxt
     let context = gamma ctxtDefs
+    
+    for_ ndefs $ \(name, def) => do
+        Just ty <- lookupTyExact name context
+            | Nothing => coreLift . putStrLn $ "Can't find type for " ++ show name
+        
+        names <- toFullNames ty
+        coreLift $ do
+            putStrLn $ "Type of " ++ show name
+            putStrLn $ "    " ++ show names
 
     let mods = modules ndefs
 
