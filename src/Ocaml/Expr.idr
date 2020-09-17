@@ -18,7 +18,6 @@ import Data.Vect
 
 import Utils.Hex
 
-import Ocaml.DefInfo
 import Ocaml.PrimFns
 import Ocaml.Utils
 import Ocaml.Foreign
@@ -51,7 +50,7 @@ mlIdent s =
 
 export
 mlName : Name -> String
-mlName (NS ns x) = "ns__" ++ showSep "'" (reverse ns) ++ "_" ++ mlName x
+mlName (NS ns x) = "ns__" ++ showNSWithSep "'" ns ++ "_" ++ mlName x
 mlName (UN x) = "un__" ++ mlIdent x
 mlName (MN x y) = "mn__" ++ mlIdent x ++ "_" ++ show y
 mlName (PV x y) = "pat__" ++ mlName x ++ "_" ++ show y

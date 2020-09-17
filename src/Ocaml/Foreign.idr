@@ -18,8 +18,6 @@ import Data.List
 import Data.List1
 import Data.Strings
 
-import Ocaml.DefInfo
-
 idrisSupport : String -> String
 idrisSupport s = "OcamlRts.C.Lib_libidris2_support." ++ s
 

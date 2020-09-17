@@ -57,7 +57,7 @@ mlRepr s = fnCall "Obj.repr" [s]
 
 export
 namespace' : Name -> String
-namespace' (NS ns _) = "Mod_" ++ showSep "_" (reverse ns)
+namespace' (NS ns _) = "Mod_" ++ showNSWithSep "_" ns
 namespace' _ = "Misc"
 
 

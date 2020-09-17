@@ -8,7 +8,6 @@ import Core.Context
 
 import Data.Vect
 
-import Ocaml.DefInfo
 import Ocaml.Utils
 
 bits8Bound : String -> String
