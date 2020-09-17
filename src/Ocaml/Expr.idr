@@ -244,7 +244,16 @@ mutual
         pure . parens $ matchVal ++ header ++ showSep " " arms ++ def'
     
     mlExpr (NmConstCase fc expr alts def) = do
-        let header = "match " ++ fnCall "Obj.obj" [!(mlExpr expr)] ++ " with "
+        let isBigInt = case alts of
+                        MkNConstAlt (BI _) _ :: _ => True
+                        _ => False
+    
+        let matchExpr = fnCall "Obj.obj" [!(mlExpr expr)]
+        let matchExpr' = if isBigInt
+                            then fnCall "Z.to_string" [matchExpr]
+                            else matchExpr
+        
+        let header = "match " ++ matchExpr' ++ " with "
         
         def' <- case def of
                     Nothing => pure ""
