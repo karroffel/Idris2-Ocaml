@@ -23,7 +23,7 @@ The `IDRIS2_SOURCE_PATH` is needed because the runtime C library headers are nee
 
 ## Attribution
 
-The files `OcamlRts.ml`, `ocaml_rts.c` are directly taken from the [malfunction backend by ziman and makx](https://github.com/ziman/idris2/tree/malfunction).
+The files `OcamlRts.ml`, `ocaml_rts.c` are directly taken from the [malfunction backend by ziman and makx](https://github.com/ziman/idris2-mlf).
 
 The Idris module `Ocaml.Modules` uses some adapted code from the same malfunction backend.
 
