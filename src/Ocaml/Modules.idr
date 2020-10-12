@@ -14,12 +14,6 @@ import Data.Vect
 
 import Ocaml.Utils
 
-adjust : String -> (v -> v) -> StringMap v -> StringMap v
-adjust k f m =
-    case lookup k m of
-        Nothing => m
-        Just v => insert k (f v) m
-
 
 splitByNamespace : List (Name, NamedDef) -> List (String, List (Name, NamedDef))
 splitByNamespace = StringMap.toList . foldl addOne StringMap.empty

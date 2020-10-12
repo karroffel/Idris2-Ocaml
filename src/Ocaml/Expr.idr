@@ -55,6 +55,7 @@ mlName (UN x) = "un__" ++ mlIdent x
 mlName (MN x y) = "mn__" ++ mlIdent x ++ "_" ++ show y
 mlName (PV x y) = "pat__" ++ mlName x ++ "_" ++ show y
 mlName (DN x y) = mlName y
+mlName (RF n) = "rf__" ++ mlIdent n
 mlName (Nested (i, x) n) = "n__" ++ show i ++ "_" ++ show x ++ "_" ++ mlName n
 mlName (CaseBlock x y) = "case__" ++ mlIdent x ++ "_" ++ show y
 mlName (WithBlock x y) = "with__" ++ mlIdent x ++ "_" ++ show y

@@ -6,6 +6,7 @@ import Compiler.Common
 import Compiler.CompileExpr
 
 import Core.Context
+import Core.Context.Log as Log
 import Core.Directory
 
 import Utils.Path
@@ -207,7 +208,7 @@ compileExpr comp c tmpDir outputDir tm outfile = do
     for_ cmdFull $ \cmd => do
         let cmd' = "cd " ++ appDirGen ++ " && " ++ cmd
         ok <- the (Core Int) . coreLift $ system cmd'
-        log "codegen.ocaml.build" 2 $ "Running command `" ++ cmd ++ "`"
+        Log.log "codegen.ocaml.build" 2 $ "Running command `" ++ cmd ++ "`"
         if ok /= 0
             then throw . InternalError $ "Command `" ++ cmd ++ "` failed."
             else pure ()

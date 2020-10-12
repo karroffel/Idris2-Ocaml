@@ -22,7 +22,7 @@ record NativeOptions where
 export
 nativeCompiler : (compilerCmd : Maybe String) -> (debug : Bool) -> NativeOptions
 nativeCompiler compilerCmd debug =
-    let f = if debug then "-g" else ""
+    let f = if debug then "-g" else "-unsafe -O2"
         cmd = fromMaybe "ocamlfind ocamlopt" compilerCmd
     in MkNativeOptions f cmd
 

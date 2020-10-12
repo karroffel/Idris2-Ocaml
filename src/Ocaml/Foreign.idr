@@ -69,7 +69,7 @@ ccLibFun (cc :: ccs) =
     then Just (substr 3 (length cc) cc)
     else if substr 0 2 cc == "C:"
         then case split (== ',') (substr 2 (length cc) cc) of
-          [fn, libn] => Just ("OcamlRts.C.Lib_" ++ rmSpaces libn ++ "." ++ fn)
+          fn ::: [libn] => Just ("OcamlRts.C.Lib_" ++ rmSpaces libn ++ "." ++ fn)
           _ => ccLibFun ccs  -- something strange -> skip
         else ccLibFun ccs  -- search further
   where
